@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>iVape Runner</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #f0f0f0; }
+    canvas { display: block; margin: 0 auto; background: #fff; border: 1px solid #000; }
+  </style>
+</head>
+<body>
+<canvas id="game" width="600" height="200"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let player = { x: 50, y: 150, width: 20, height: 20, vy: 0, gravity: 0.6, jump: -10 };
+let obstacles = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+
+function createObstacle() {
+  let height = 20;
+  obstacles.push({ x: 600, y: 150, width: 20, height: height });
+}
+
+function update() {
+  if (gameOver) return;
+  frame++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // игрок
+  player.vy += player.gravity;
+  player.y += player.vy;
+  if (player.y > 150) { player.y = 150; player.vy = 0; }
+
+  ctx.fillStyle = 'green';
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+
+  // препятствия
+  if (frame % 100 === 0) createObstacle();
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    obstacles[i].x -= 4;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(obstacles[i].x, obstacles[i].y, obstacles[i].width, obstacles[i].height);
+
+    // столкновение
+    if (player.x < obstacles[i].x + obstacles[i].width &&
+        player.x + player.width > obstacles[i].x &&
+        player.y < obstacles[i].y + obstacles[i].height &&
+        player.y + player.height > obstacles[i].y) {
+      gameOver = true;
+      alert('Game Over! Score: ' + score);
+    }
+
+    if (obstacles[i].x + obstacles[i].width < 0) {
+      obstacles.splice(i, 1);
+      score++;
+    }
+  }
+
+  ctx.fillStyle = 'black';
+  ctx.fillText("Score: " + score, 500, 20);
+
+  requestAnimationFrame(update);
+}
+
+document.addEventListener('keydown', () => { if (player.y === 150) player.vy = player.jump; });
+document.addEventListener('click', () => { if (player.y === 150) player.vy = player.jump; });
+
+update();
+</script>
+</body>
+</html>

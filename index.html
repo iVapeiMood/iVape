@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>iVape Runner Online</title>
+<title>iVape Runner 3.0</title>
 <style>
 body { margin:0; overflow:hidden; font-family:Arial,sans-serif; background:#000; }
 canvas { display:block; }
@@ -125,23 +125,9 @@ async function updateLeaderboard(){
 // ====================== Генерация объектов ======================
 function spawnObject(type){
   let obj = {x: canvas.width, width:50, height:50};
-  let safe=false;
-  while(!safe){
-    safe=true;
-    obj.y = groundY - obj.height - 10;
-    obstacles.forEach(o=>{
-      if(obj.x < o.x + o.width && obj.x + obj.width > o.x &&
-         obj.y < o.y + o.height && obj.y + obj.height > o.y){
-        safe=false; obj.x += 60;
-      }
-    });
-    [...bonuses,...slows].forEach(other=>{
-      if(obj.x < other.x + other.width && obj.x + obj.width > other.x &&
-         obj.y < other.y + other.height && obj.y + obj.height > other.y){
-        safe=false; obj.x += 60;
-      }
-    });
-  }
+  if(type==="bonus"||type==="slow") obj.y = groundY - obj.height - 5;
+  else if(type==="air") obj.y = groundY - obj.height - 150;
+  else obj.y = groundY - obj.height;
   if(type==="bonus") bonuses.push(obj);
   else if(type==="slow") slows.push(obj);
   else obstacles.push(obj);
@@ -164,13 +150,14 @@ function update(){
   if(frame%100===0) spawnObject("ground");
   if(frame%500===0) spawnObject("bonus");
   if(frame%1000===0) spawnObject("slow");
+  if(frame%700===0) spawnObject("air");
 
   // Препятствия
   for(let i=obstacles.length-1;i>=0;i--){
     let o=obstacles[i]; o.x-=4*speedMultiplier;
     if(o.x+o.width<0){ obstacles.splice(i,1); score++; continue; }
-    if(obstacleImages.ground.complete && o.width===50) ctx.drawImage(obstacleImages.ground,o.x,o.y,o.width,o.height);
-    else ctx.fillStyle="brown"; ctx.fillRect(o.x,o.y,o.width,o.height);
+    if(obstacleImages.ground.complete && o.y>=groundY-50) ctx.drawImage(obstacleImages.ground,o.x,o.y,o.width,o.height);
+    else if(obstacleImages.air.complete && o.y<groundY-50) ctx.drawImage(obstacleImages.air,o.x,o.y,o.width,o.height);
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<o.x+o.width-pad && player.x+player.width-pad>o.x+pad &&
        player.y+pad<o.y+o.height-pad && playerBottom-pad>o.y+pad){
@@ -179,30 +166,30 @@ function update(){
   }
 
   // Бонусы
-  let removeBonuses=[]; bonuses.forEach((b,i)=>{
-    b.x-=4*speedMultiplier; if(b.x+b.width<0){ removeBonuses.push(i); return; }
+  bonuses.forEach((b,i)=>{
+    b.x-=4*speedMultiplier;
+    if(b.x+b.width<0){ bonuses.splice(i,1); return; }
     if(bonusImg.complete) ctx.drawImage(bonusImg,b.x,b.y,b.width,b.height);
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<b.x+b.width-pad && player.x+player.width-pad>b.x+pad &&
        player.y+pad<b.y+b.height-pad && playerBottom-pad>b.y+pad){
-      score+=5; speedMultiplier=1.5; player.effectTimer=30; removeBonuses.push(i);
+      score+=5; speedMultiplier=1.5; player.effectTimer=30; bonuses.splice(i,1);
       setTimeout(()=>speedMultiplier=1,5000);
     }
   });
-  removeBonuses.reverse().forEach(i=>bonuses.splice(i,1));
 
   // Отрицательные бонусы
-  let removeSlows=[]; slows.forEach((s,i)=>{
-    s.x-=4*speedMultiplier; if(s.x+s.width<0){ removeSlows.push(i); return; }
+  slows.forEach((s,i)=>{
+    s.x-=4*speedMultiplier;
+    if(s.x+s.width<0){ slows.splice(i,1); return; }
     if(slowImg.complete) ctx.drawImage(slowImg,s.x,s.y,s.width,s.height);
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<s.x+s.width-pad && player.x+player.width-pad>s.x+pad &&
        player.y+pad<s.y+s.height-pad && playerBottom-pad>s.y+pad){
-      score=Math.max(0,score-10); invertedControl=true; player.effectTimer=30; removeSlows.push(i);
+      score=Math.max(0,score-10); invertedControl=true; player.effectTimer=30; slows.splice(i,1);
       setTimeout(()=>invertedControl=false,5000);
     }
   });
-  removeSlows.reverse().forEach(i=>slows.splice(i,1));
 
   // Игрок
   player.vy+=player.gravity; player.y+=player.vy;
@@ -217,6 +204,7 @@ function update(){
   if(player.effectTimer>0){ if(Math.floor(frame/5)%2==0) ctx.globalAlpha=0.5; }
   if(imgToDraw.complete) ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight);
   ctx.globalAlpha=1;
+  if(player.effectTimer>0) player.effectTimer--;
 
   // Счёт
   ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fillRect(canvas.width-160,10,150,40);

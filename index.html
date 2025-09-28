@@ -91,7 +91,7 @@ function spawnObstacle(){
   let o={x:canvas.width,width:50,height:50,type:type};
 
   if(type==="ground") o.y=groundY-o.height;
-  else if(type==="air") o.y=540;               // верхнее препятствие
+  else if(type==="air") o.y=545;               // верхнее препятствие
   else if(type==="wire") o.y=groundY-20;      // провод опущен ниже для приседания
 
   obstacles.push(o);
@@ -280,6 +280,7 @@ document.getElementById('submitName').addEventListener('click',()=>{
 </script>
 </body>
 </html>
+
 
 
 

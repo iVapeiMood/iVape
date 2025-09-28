@@ -77,108 +77,7 @@ let slowImg=new Image(); slowImg.src="assets/images/slow.png";
 let bgImg=new Image(); bgImg.src="assets/images/background.png";
 let grassImg=new Image(); grassImg.src="assets/images/grass.png";
 
-let groundY=0,bgX=0,grassX=0;
-let speedMultiplier=1,invertedControl=false;
-let frame=0,score=0,gameOver=false,gameRunning=false;
-
-// ====================== Загрузка всех текстур ======================
-let assetsLoaded=0;
-let totalAssets=10;
-function assetLoaded(){ assetsLoaded++; if(assetsLoaded>=totalAssets){ restartGame(); } }
-
-player.imgJump.onload = assetLoaded;
-player.imgCrouch.onload = assetLoaded;
-player.runFrames.forEach(img=>img.onload=assetLoaded);
-bgImg.onload = assetLoaded;
-grassImg.onload = assetLoaded;
-obstacleImages.ground.onload = assetLoaded;
-obstacleImages.air.onload = assetLoaded;
-bonusImg.onload = assetLoaded;
-slowImg.onload = assetLoaded;
-
-// ====================== Сброс игры ======================
-function restartGame(){
-  groundY = canvas.height*0.7;
-  player.y = groundY-player.height; player.<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>iVape Runner Online</title>
-<style>
-body { margin:0; overflow:hidden; font-family:Arial,sans-serif; background:#000; }
-canvas { display:block; }
-#nameInputUI, #gameOverUI { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:white; z-index:100; }
-#nameInput { padding:10px; font-size:18px; }
-button { padding:10px 20px; font-size:18px; margin-top:10px; cursor:pointer; border:none; border-radius:10px; background:#222; color:white; }
-#leaderboard { position:absolute; top:10px; left:10px; color:white; background:rgba(0,0,0,0.5); padding:10px; border-radius:10px; max-width:200px; z-index:50; }
-</style>
-</head>
-<body>
-<canvas id="game"></canvas>
-
-<div id="nameInputUI">
-  <div>Введите имя:</div>
-  <input type="text" id="nameInput" placeholder="Ваше имя"><br>
-  <button id="submitName">Старт</button>
-</div>
-
-<div id="gameOverUI" style="display:none;">
-  <div>Хотите повторить попытку?</div>
-  <button id="retryBtn">Да</button>
-</div>
-
-<div id="leaderboard"></div>
-
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-import { getDatabase, ref, push, get, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
-
-// ================= Firebase =================
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_ID",
-  appId: "YOUR_APP_ID"
-};
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-// ================= Игровые переменные =================
-const canvas=document.getElementById('game');
-const ctx=canvas.getContext('2d');
-const retryBtn=document.getElementById('retryBtn');
-const gameOverUI=document.getElementById('gameOverUI');
-const leaderboardDiv=document.getElementById('leaderboard');
-let playerName="";
-let playerId = localStorage.getItem("playerId") || crypto.randomUUID();
-localStorage.setItem("playerId", playerId);
-
-function resizeCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
-resizeCanvas(); window.addEventListener('resize',resizeCanvas);
-
-// Игрок
-let player={width:60,height:60,x:100,y:0,vy:0,gravity:0.6,jump:-15,
-crouching:false,runFrames:[],frameIndex:0,frameSpeed:5,imgJump:new Image(),imgCrouch:new Image(),effectTimer:0};
-for(let i=1;i<=2;i++){let img=new Image(); img.src="assets/images/player_run"+i+".png"; player.runFrames.push(img);}
-player.imgJump.src="assets/images/player_jump.png";
-player.imgCrouch.src="assets/images/player_crouch.png";
-
-// Объекты
-let obstacles=[], obstacleImages={ground:new Image(), air:new Image()};
-obstacleImages.ground.src="assets/images/obstacle1.png";
-obstacleImages.air.src="assets/images/obstacle2.png";
-
-let bonuses=[], slows=[];
-let bonusImg=new Image(); bonusImg.src="assets/images/bonus.png";
-let slowImg=new Image(); slowImg.src="assets/images/slow.png";
-
-let bgImg=new Image(); bgImg.src="assets/images/background.png";
-let grassImg=new Image(); grassImg.src="assets/images/grass.png";
-
-let groundY=0,bgX=0,grassX=0;
+let groundY=0,bgX=0;
 let speedMultiplier=1,invertedControl=false;
 let frame=0,score=0,gameOver=false,gameRunning=false;
 
@@ -208,7 +107,7 @@ function restartGame(){
   gameRunning=true;
 }
 
-// ====================== Отправка и получение рекордов ======================
+// ====================== Рекорды ======================
 async function sendScore(name, id, score){
   await push(ref(db,'scores'),{name,id,score});
   updateLeaderboard();
@@ -223,23 +122,23 @@ async function updateLeaderboard(){
   leaderboardDiv.innerHTML = "<b>Топ игроков:</b><br>"+arr.map(x=>x.name+": "+x.score).join("<br>");
 }
 
-// ====================== Создание объектов с проверкой коллизий ======================
+// ====================== Генерация объектов ======================
 function spawnObject(type){
-  let obj = {x:canvas.width, width:50, height:50};
+  let obj = {x: canvas.width, width:50, height:50};
   let safe=false;
   while(!safe){
     safe=true;
-    obj.y = groundY - obj.height - 10; // на земле
+    obj.y = groundY - obj.height - 10;
     obstacles.forEach(o=>{
       if(obj.x < o.x + o.width && obj.x + obj.width > o.x &&
          obj.y < o.y + o.height && obj.y + obj.height > o.y){
-          safe=false; obj.x += 60;
+        safe=false; obj.x += 60;
       }
     });
     [...bonuses,...slows].forEach(other=>{
       if(obj.x < other.x + other.width && obj.x + obj.width > other.x &&
          obj.y < other.y + other.height && obj.y + obj.height > other.y){
-          safe=false; obj.x += 60;
+        safe=false; obj.x += 60;
       }
     });
   }

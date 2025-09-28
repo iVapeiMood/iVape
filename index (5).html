@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>iVape Runner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; overflow: hidden; background: #87CEEB; }
+    canvas { display: block; margin: 0 auto; background: #cceeff; border: 2px solid #000; }
+  </style>
+</head>
+<body>
+<canvas id="game" width="600" height="200"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// 🌟 Игрок
+let player = { 
+  x: 50, y: 150, width: 40, height: 40, vy: 0, gravity: 0.6, jump: -10,
+  crouching: false,
+  img: new Image()
+};
+player.img.src = 'assets/images/ivape.png'; // путь к твоему персонажу
+
+// 🌟 Препятствия
+let obstacleImages = {
+  ground: new Image(),
+  air: new Image()
+};
+obstacleImages.ground.src = 'assets/images/obstacle1.png';
+obstacleImages.air.src = 'assets/images/obstacle2.png';
+
+let obstacles = [];
+let frame = 0;
+let score = 0;
+let gameOver = false;
+let gameRunning = false;
+
+// Создание препятствий
+function createObstacle() {
+  let type = Math.random() < 0.5 ? "ground" : "air";
+  if (type === "ground") {
+    obstacles.push({ x: 600, y: 150, width: 40, height: 40, type }); // земля
+  } else {
+    obstacles.push({ x: 600, y: 120, width: 40, height: 40, type }); // воздух
+  }
+}
+
+// Сброс игры
+function restartGame() {
+  player.y = 150;
+  player.vy = 0;
+  player.crouching = false;
+  obstacles = [];
+  frame = 0;
+  score = 0;
+  gameOver = false;
+  if (!gameRunning) {
+    gameRunning = true;
+    update();
+  }
+}
+
+// Отрисовка и логика
+function update() {
+  if (gameOver) { gameRunning = false; return; }
+
+  frame++;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 🌞 Солнце
+  ctx.fillStyle = "yellow";
+  ctx.beginPath();
+  ctx.arc(550, 40, 25, 0, Math.PI*2);
+  ctx.fill();
+
+  // Лучи солнца
+  for (let i = 0; i < 8; i++) {
+    let angle = i * Math.PI / 4;
+    ctx.beginPath();
+    ctx.moveTo(550, 40);
+    ctx.lineTo(550 + 40 * Math.cos(angle), 40 + 40 * Math.sin(angle));
+    ctx.strokeStyle = "orange";
+    ctx.stroke();
+  }
+
+  // 🌿 Земля
+  ctx.fillStyle = "#228B22";
+  ctx.fillRect(0, 180, canvas.width, 20);
+
+  // ☁️ Облака
+  ctx.fillStyle = "white";
+  ctx.beginPath(); ctx.arc(100, 50, 15, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(115, 50, 20, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(135, 50, 15, 0, Math.PI*2); ctx.fill();
+
+  ctx.beginPath(); ctx.arc(400, 70, 10, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(415, 70, 15, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(430, 70, 10, 0, Math.PI*2); ctx.fill();
+
+  // 👾 Игрок
+  player.vy += player.gravity;
+  player.y += player.vy;
+  if (player.y > 150) player.y = 150;
+
+  let actualY = player.y;
+  let drawHeight = player.height;
+  if (player.crouching && player.y === 150) {
+    drawHeight = player.height / 2;
+    actualY = player.y + player.height / 2;
+  }
+
+  ctx.drawImage(player.img, player.x, actualY, player.width, drawHeight);
+
+  // 🚧 Препятствия
+  if (frame % 100 === 0) createObstacle();
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    let o = obstacles[i];
+    o.x -= 4;
+    ctx.drawImage(obstacleImages[o.type], o.x, o.y, o.width, o.height);
+
+    // Столкновение
+    let playerTop = actualY;
+    let playerBottom = actualY + drawHeight;
+    let playerLeft = player.x;
+    let playerRight = player.x + player.width;
+    if (playerLeft < o.x + o.width &&
+        playerRight > o.x &&
+        playerTop < o.y + o.height &&
+        playerBottom > o.y) {
+      gameOver = true;
+      setTimeout(() => {
+        if (confirm('Game Over! Твой счёт: ' + score + '\nНачать заново?')) restartGame();
+      }, 10);
+    }
+
+    if (o.x + o.width < 0) {
+      obstacles.splice(i, 1);
+      score++;
+    }
+  }
+
+  // Счёт
+  ctx.fillStyle = "black";
+  ctx.font = "16px Arial";
+  ctx.fillText("Score: " + score, 500, 20);
+
+  requestAnimationFrame(update);
+}
+
+// Управление
+function jump() { if (!gameOver && player.y === 150) player.vy = player.jump; }
+function crouchStart() { if (!gameOver) player.crouching = true; }
+function crouchEnd() { player.crouching = false; }
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') jump();
+  if (e.code === 'ArrowDown') crouchStart();
+});
+document.addEventListener('keyup', (e) => { if (e.code === 'ArrowDown') crouchEnd(); });
+document.addEventListener('click', jump);
+document.addEventListener('touchstart', (e) => {
+  if (e.touches[0].clientY > window.innerHeight / 2) crouchStart();
+  else jump();
+});
+document.addEventListener('touchend', crouchEnd);
+
+// Первый запуск
+restartGame();
+</script>
+</body>
+</html>

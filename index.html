@@ -140,6 +140,7 @@ function update() {
     let playerTop = player.y;
     let playerBottom = player.y + player.height;
     if(player.crouching) playerBottom = player.y + player.height/2;
+    
     let playerLeft = player.x;
     let playerRight = player.x + player.width;
 
@@ -200,4 +201,5 @@ document.addEventListener('touchend', crouchEnd);
 </script>
 </body>
 </html>
+
 

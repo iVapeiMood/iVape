@@ -91,7 +91,7 @@ function spawnObstacle(){
   let o={x:canvas.width,width:50,height:50,type:type};
 
   if(type==="ground") o.y=groundY-o.height;
-  else if(type==="air") o.y=50;               // верхнее препятствие
+  else if(type==="air") o.y=-20;               // верхнее препятствие
   else if(type==="wire") o.y=groundY-30;      // провод опущен ниже для приседания
 
   obstacles.push(o);
@@ -120,7 +120,7 @@ function spawnBonus(){
 
   // Создание объектов
   if(frame%100===0) spawnObstacle();
-  if(frame%300===0) spawnBonus(); // бонусы каждые 5 секунд
+  if(frame%300===0) spawnBonus(); // бонусы каждые 6 секунд
 
   // Препятствия
   for(let i=obstacles.length-1;i>=0;i--){
@@ -223,5 +223,6 @@ document.getElementById('submitName').addEventListener('click',()=>{
 </script>
 </body>
 </html>
+
 
 

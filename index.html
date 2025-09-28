@@ -36,7 +36,11 @@ let player = {
 // Загружаем кадры бега
 for (let i = 1; i <= 2; i++) {
   let img = new Image();
-  img.src = assets/images/player_run1.png;
+  for (let i = 1; i <= 2; i++) {
+  let img = new Image();
+  img.src = "assets/images/player_run" + i + ".png";
+  player.runFrames.push(img);
+}
   player.runFrames.push(img);
 }
 player.imgJump.src = 'assets/images/player_jump.png';
@@ -228,4 +232,5 @@ restartGame();
 </script>
 </body>
 </html>
+
 

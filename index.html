@@ -4,18 +4,12 @@
 <meta charset="UTF-8">
 <title>iVape Runner Online</title>
 <style>
-body { margin:0; overflow:hidden; font-family:Arial,sans-serif; }
-canvas { display:block; background:#87CEEB; }
-#gameOverUI { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-text-align:center; display:none; z-index:100; color:white; }
-#retryBtn { padding:15px 25px; font-size:20px; margin-top:10px; background:#222; color:white;
-border:none; border-radius:10px; cursor:pointer; }
-#nameInputUI { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-text-align:center; z-index:100; color:white; }
+body { margin:0; overflow:hidden; font-family:Arial,sans-serif; background:#000; }
+canvas { display:block; }
+#nameInputUI, #gameOverUI { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:white; z-index:100; }
 #nameInput { padding:10px; font-size:18px; }
-#submitName { padding:10px 20px; font-size:18px; margin-top:10px; cursor:pointer; }
-#leaderboard { position:absolute; top:10px; left:10px; color:white; background:rgba(0,0,0,0.5);
-padding:10px; border-radius:10px; max-width:200px; }
+button { padding:10px 20px; font-size:18px; margin-top:10px; cursor:pointer; border:none; border-radius:10px; background:#222; color:white; }
+#leaderboard { position:absolute; top:10px; left:10px; color:white; background:rgba(0,0,0,0.5); padding:10px; border-radius:10px; max-width:200px; z-index:50; }
 </style>
 </head>
 <body>
@@ -23,12 +17,11 @@ padding:10px; border-radius:10px; max-width:200px; }
 
 <div id="nameInputUI">
   <div>Введите имя:</div>
-  <input type="text" id="nameInput" placeholder="Ваше имя">
-  <br>
+  <input type="text" id="nameInput" placeholder="Ваше имя"><br>
   <button id="submitName">Старт</button>
 </div>
 
-<div id="gameOverUI">
+<div id="gameOverUI" style="display:none;">
   <div>Хотите повторить попытку?</div>
   <button id="retryBtn">Да</button>
 </div>
@@ -52,12 +45,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// ================= Игра =================
+// ================= Игровые переменные =================
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const retryBtn=document.getElementById('retryBtn');
 const gameOverUI=document.getElementById('gameOverUI');
 const leaderboardDiv=document.getElementById('leaderboard');
+let playerName="";
+let playerId = localStorage.getItem("playerId") || crypto.randomUUID();
+localStorage.setItem("playerId", playerId);
 
 function resizeCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
 resizeCanvas(); window.addEventListener('resize',resizeCanvas);
@@ -85,11 +81,6 @@ let groundY=0,bgX=0,grassX=0;
 let speedMultiplier=1,invertedControl=false;
 let frame=0,score=0,gameOver=false,gameRunning=false;
 
-// Имя и ID
-let playerName="";
-let playerId = localStorage.getItem("playerId") || crypto.randomUUID();
-localStorage.setItem("playerId", playerId);
-
 // ====================== Создание объектов ======================
 function createObstacle(){
   let o={x:canvas.width,width:60,height:60};
@@ -100,40 +91,20 @@ function createObstacle(){
 
 function createBonus(){
   let b={x:canvas.width,width:50,height:50};
-  let safe=false;
-  while(!safe){
-    safe=true;
-    b.y=groundY-b.height-10;
-    obstacles.forEach(o=>{
-      if(b.x<b.x+o.width && b.x+b.width>o.x && b.y<b.y+o. height && b.y+b.height>o.y) b.y=o.y-b.height-10;
-    });
-    [...bonuses,...slows].forEach(other=>{
-      if(b.x<b.x+other.width && b.x+b.width>other.x && b.y<b.y+other.height && b.y+b.height>other.y) safe=false;
-    });
-  }
+  b.y=groundY-b.height-10; // на земле
   bonuses.push(b);
 }
 
 function createSlow(){
   let s={x:canvas.width,width:50,height:50};
-  let safe=false;
-  while(!safe){
-    safe=true;
-    s.y=groundY-s.height-10;
-    obstacles.forEach(o=>{
-      if(s.x<s.x+o.width && s.x+s.width>o.x && s.y<s.y+o.height && s.y+s.height>o.y) s.y=o.y-s.height-10;
-    });
-    [...bonuses,...slows].forEach(other=>{
-      if(s.x<s.x+other.width && s.x+s.width>other.x && s.y<s.y+other.height && s.y+s.height>other.y) safe=false;
-    });
-  }
+  s.y=groundY-s.height-10; // на земле
   slows.push(s);
 }
 
 // ====================== Сброс игры ======================
 function restartGame(){
   groundY = canvas.height*0.7;
-  player.y = groundY-player.height; player.vy=0; player.crouching=false; player.effectTimer=0;
+  player.y = groundY-player.height; player.vy=0; player. crouching=false; player.effectTimer=0;
   obstacles=[]; bonuses=[]; slows=[];
   frame=0; score=0; gameOver=false;
   speedMultiplier=1; invertedControl=false;
@@ -162,16 +133,13 @@ function update(){
   frame++; ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // Фон
-  ctx.drawImage(bgImg,bgX,0,canvas.width,canvas.height);
-  ctx.drawImage(bgImg,bgX+canvas.width,0,canvas.width,canvas.height);
+  if(bgImg.complete) ctx.drawImage(bgImg,bgX,0,canvas.width,canvas.height*0.7);
   bgX-=1*speedMultiplier; if(bgX<=-canvas.width) bgX=0;
+  if(bgImg.complete) ctx.drawImage(bgImg,bgX+canvas.width,0,canvas.width,canvas.height*0.7);
 
   // Земля
-  if(grassImg.complete){
-    grassX-=4*speedMultiplier; if(grassX<=-canvas.width) grassX=0;
-    ctx.drawImage(grassImg,grassX,groundY,canvas.width,canvas.height-groundY);
-    ctx.drawImage(grassImg,grassX+canvas.width,groundY,canvas.width,canvas.height-groundY);
-  } else { ctx.fillStyle="#228B22"; ctx.fillRect(0,groundY,canvas.width,canvas.height-groundY); }
+  if(grassImg.complete) ctx.drawImage(grassImg,grassX,groundY,canvas.width,canvas.height-groundY);
+  else ctx.fillStyle="#228B22"; ctx.fillRect(0,groundY,canvas.width,canvas.height-groundY);
 
   // Создание объектов
   if(frame%100===0) createObstacle();
@@ -184,19 +152,17 @@ function update(){
     if(o.x+o.width<0){ obstacles.splice(i,1); score++; continue; }
     if(obstacleImages[o.type].complete) ctx.drawImage(obstacleImages[o.type],o.x,o.y,o.width,o.height);
     else ctx.fillStyle="brown"; ctx.fillRect(o.x,o.y,o.width,o.height);
-
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<o.x+o.width-pad && player.x+player.width-pad>o.x+pad &&
-       player.y+pad<o.y+o.height-pad && playerBottom-pad>o.y+pad){ gameOver=true; sendScore(playerName,playerId,score); }
+       player.y+pad<o.y+o.height-pad && playerBottom-pad>o.y+pad){
+      gameOver=true; sendScore(playerName,playerId,score);
+    }
   }
 
   // Бонусы
   let removeBonuses=[]; bonuses.forEach((b,i)=>{
     b.x-=4*speedMultiplier; if(b.x+b.width<0){ removeBonuses.push(i); return; }
-    ctx.shadowBlur=10; ctx.shadowColor="lime";
     if(bonusImg.complete) ctx.drawImage(bonusImg,b.x,b.y,b.width,b.height);
-    else ctx.fillStyle="green"; ctx.fillRect(b.x,b.y,b.width,b.height);
-    ctx.shadowBlur=0;
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<b.x+b.width-pad && player.x+player.width-pad>b.x+pad &&
        player.y+pad<b.y+b.height-pad && playerBottom-pad>b.y+pad){
@@ -209,10 +175,7 @@ function update(){
   // Отрицательные бонусы
   let removeSlows=[]; slows.forEach((s,i)=>{
     s.x-=4*speedMultiplier; if(s.x+s.width<0){ removeSlows.push(i); return; }
-    ctx.shadowBlur=10; ctx.shadowColor="red";
     if(slowImg.complete) ctx.drawImage(slowImg,s.x,s.y,s.width,s.height);
-    else ctx.fillStyle="red"; ctx.fillRect(s.x,s.y,s.width,s.height);
-    ctx.shadowBlur=0;
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<s.x+s.width-pad && player.x+player.width-pad>s.x+pad &&
        player.y+pad<s.y+s.height-pad && playerBottom-pad>s.y+pad){
@@ -230,7 +193,7 @@ function update(){
   let imgToDraw;
   if(player.y<groundY-player.height) imgToDraw=player.imgJump;
   else if(player.crouching) imgToDraw=player.imgCrouch;
-  else { if(frame%player.frameSpeed===0) player.frameIndex=(player.frameIndex+1)%player.runFrames.length;
+  else { if(frame%player.frameSpeed===0) player.frameIndex=(player.frameIndex+1)%player.runFrames. length;
          imgToDraw=player.runFrames[player.frameIndex]; }
   if(imgToDraw.complete) ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight);
   else ctx.fillStyle="blue"; ctx.fillRect(player.x,actualY,player.width,drawHeight);
@@ -267,7 +230,6 @@ document.addEventListener('touchend', e=>{
 
 // ====================== Кнопки ======================
 retryBtn.addEventListener('click',()=>{ restartGame(); });
-
 document.getElementById('submitName').addEventListener('click',()=>{
   let input=document.getElementById('nameInput').value.trim();
   if(input){ playerName=input; document.getElementById('nameInputUI').style.display="none"; restartGame(); updateLeaderboard(); }

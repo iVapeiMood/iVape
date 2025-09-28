@@ -6,18 +6,25 @@
 <style>
 body { margin:0; overflow:hidden; font-family:Arial,sans-serif; }
 canvas { display:block; background:#87CEEB; }
-button { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
-        padding:15px 25px; font-size:20px; background:#222; color:white; border:none;
-        border-radius:10px; cursor:pointer; z-index:100; }
+#gameOverUI { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+text-align:center; display:none; z-index:100; }
+#retryBtn { padding:15px 25px; font-size:20px; margin-top:10px; background:#222; color:white;
+border:none; border-radius:10px; cursor:pointer; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-<button id="retryBtn">Хотите повторить попытку?</button>
+
+<div id="gameOverUI">
+  <div style="color:white;font-size:24px;">Хотите повторить попытку?</div>
+  <button id="retryBtn">Да</button>
+</div>
+
 <script>
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const retryBtn=document.getElementById('retryBtn');
+const gameOverUI=document.getElementById('gameOverUI');
 
 function resizeCanvas(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
 resizeCanvas();
@@ -26,14 +33,9 @@ window.addEventListener('resize',resizeCanvas);
 // ======================
 // Игрок
 // ======================
-let player={
-  width:60,height:60,x:100,y:0,
-  vy:0,gravity:0.6,jump:-15,
-  crouching:false,runFrames:[],frameIndex:0,frameSpeed:5,
-  imgJump:new Image(),imgCrouch:new Image(),
-  effectTimer:0
-};
-for(let i=1;i<=2;i++){ let img=new Image(); img.src="assets/images/player_run"+i+".png"; player.runFrames.push(img);}
+let player={width:60,height:60,x:100,y:0,vy:0,gravity:0.6,jump:-15,
+crouching:false,runFrames:[],frameIndex:0,frameSpeed:5,imgJump:new Image(),imgCrouch:new Image(),effectTimer:0};
+for(let i=1;i<=2;i++){let img=new Image(); img.src="assets/images/player_run"+i+".png"; player.runFrames.push(img);}
 player.imgJump.src="assets/images/player_jump.png";
 player.imgCrouch.src="assets/images/player_crouch.png";
 
@@ -59,7 +61,7 @@ let grassImg=new Image(); grassImg.src="assets/images/grass.png";
 
 let groundY=0,bgX=0,grassX=0;
 let speedMultiplier=1,invertedControl=false;
-let frame=0, score=0, gameOver=false, gameRunning=false;
+let frame=0,score=0,gameOver=false,gameRunning=false;
 
 // ======================
 // Создание объектов
@@ -70,14 +72,44 @@ function createObstacle(){
   o.y=(o.type==="ground")?groundY-o.height:groundY-o.height-80;
   obstacles.push(o);
 }
+
 function createBonus(){
   let b={x:canvas.width,width:50,height:50};
-  b.y=groundY-b.height-10; // чуть выше земли
+  let safe=false;
+  while(!safe){
+    safe=true;
+    b.y=groundY-b.height-10; 
+    obstacles.forEach(o=>{
+      if(b.x<b.x+o.width && b.x+b.width>o.x && b.y<b.y+o.height && b.y+b.height>o.y){
+        b.y=o.y-b.height-10; 
+      }
+    });
+    [...bonuses,...slows].forEach(other=>{
+      if(b.x<b.x+other.width && b.x+b.width>other.x && b.y<b.y+other.height && b.y+b.height>other.y){
+        safe=false;
+      }
+    });
+  }
   bonuses.push(b);
 }
+
 function createSlow(){
   let s={x:canvas.width,width:50,height:50};
-  s.y=groundY-s.height-10;
+  let safe=false;
+  while(!safe){
+    safe=true;
+    s.y=groundY-s.height-10;
+    obstacles.forEach(o=>{
+      if(s.x<s.x+o.width && s.x+s.width>o.x && s.y<s.y+o.height && s.y+s.height>o.y){
+        s.y=o.y-s.height-10;
+      }
+    });
+    [...bonuses,...slows].forEach(other=>{
+      if(s.x<s.x+other.width && s.x+s.width>other.x && s.y<s.y+other.height && s.y+s.height>other.y){
+        safe=false;
+      }
+    });
+  }
   slows.push(s);
 }
 
@@ -91,7 +123,7 @@ function restartGame(){
   obstacles=[]; bonuses=[]; slows=[];
   frame=0; score=0; gameOver=false;
   speedMultiplier=1; invertedControl=false;
-  retryBtn.style.display="none";
+  gameOverUI.style.display="none";
   if(!gameRunning) update();
   gameRunning=true;
 }
@@ -99,32 +131,28 @@ function restartGame(){
 // ======================
 // Основной цикл
 // ======================
-function update(){
-  if(gameOver){ gameRunning=false; retryBtn.style.display="block"; return; }
+        function update(){
+  if(gameOver){ gameRunning=false; gameOverUI.style.display="block"; return; }
   frame++; ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // ---------- Фон 70%
-  let bgHeight=canvas.height*0.7;
-  if(bgImg.complete){
-    bgX-=1*speedMultiplier; if(bgX<=-canvas.width) bgX=0;
-    ctx.drawImage(bgImg,bgX,0,canvas.width,bgHeight);
-    ctx.drawImage(bgImg,bgX+canvas.width,0,canvas.width,bgHeight);
-  } else { ctx.fillStyle="#87CEEB"; ctx.fillRect(0,0,canvas.width,bgHeight); }
+  // ---------- Фон
+  ctx.drawImage(bgImg,bgX,0,canvas.width,canvas.height);
+  ctx.drawImage(bgImg,bgX+canvas.width,0,canvas.width,canvas.height);
+  bgX-=1*speedMultiplier; if(bgX<=-canvas.width) bgX=0;
 
-  // ---------- Земля 30%
-  let groundHeight=canvas.height-groundY;
+  // ---------- Земля
   if(grassImg.complete){
     grassX-=4*speedMultiplier; if(grassX<=-canvas.width) grassX=0;
-    ctx.drawImage(grassImg,grassX,groundY,canvas.width,groundHeight);
-    ctx.drawImage(grassImg,grassX+canvas.width,groundY,canvas.width,groundHeight);
-  } else { ctx.fillStyle="#228B22"; ctx.fillRect(0,groundY,canvas.width,groundHeight); }
+    ctx.drawImage(grassImg,grassX,groundY,canvas.width,canvas.height-groundY);
+    ctx.drawImage(grassImg,grassX+canvas.width,groundY,canvas.width,canvas.height-groundY);
+  } else { ctx.fillStyle="#228B22"; ctx.fillRect(0,groundY,canvas.width,canvas.height-groundY); }
 
   // ---------- Создание объектов
   if(frame%100===0) createObstacle();
   if(frame%500===0) createBonus();
   if(frame%1000===0) createSlow();
 
-  // ---------- Препятствия ----------
+  // ---------- Препятствия
   for(let i=obstacles.length-1;i>=0;i--){
     let o=obstacles[i]; o.x-=4*speedMultiplier;
     if(o.x+o.width<0){ obstacles.splice(i,1); score++; continue; }
@@ -136,7 +164,7 @@ function update(){
        player.y+pad<o.y+o.height-pad && playerBottom-pad>o.y+pad){ gameOver=true; }
   }
 
-  // ---------- Бонусы ----------
+  // ---------- Бонусы
   for(let i=bonuses.length-1;i>=0;i--){
     let b=bonuses[i]; b.x-=4*speedMultiplier; if(b.x+b.width<0){ bonuses.splice(i,1); continue; }
     ctx.shadowBlur=10; ctx.shadowColor="lime";
@@ -152,7 +180,7 @@ function update(){
     }
   }
 
-  // ---------- Отрицательные бонусы ----------
+  // ---------- Отрицательные бонусы
   for(let i=slows.length-1;i>=0;i--){
     let s=slows[i]; s.x-=4*speedMultiplier; if(s.x+s.width<0){ slows.splice(i,1); continue; }
     ctx.shadowBlur=10; ctx.shadowColor="red";
@@ -169,7 +197,7 @@ function update(){
     }
   }
 
-  // ---------- Игрок ----------
+  // ---------- Игрок
   player.vy+=player.gravity; player.y+=player.vy;
   if(player.y>groundY-player.height){ player.y=groundY-player.height; player.vy=0; }
   let actualY=player.y; let drawHeight=player.height;
@@ -179,11 +207,10 @@ function update(){
   if(player.y<groundY-player.height) imgToDraw=player.imgJump;
   else if(player.crouching) imgToDraw=player.imgCrouch;
   else { if(frame%player.frameSpeed===0) player.frameIndex=(player.frameIndex+1)%player.runFrames.length; imgToDraw=player.runFrames[player.frameIndex]; }
-
-  if(imgToDraw.complete){ ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight); }
+  if(imgToDraw.complete) ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight);
   else { ctx.fillStyle="blue"; ctx.fillRect(player.x,actualY,player.width,drawHeight); }
 
-  // ---------- Счёт ----------
+  // ---------- Счёт
   ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fillRect(canvas.width-160,10,150,40);
   ctx.fillStyle="white"; ctx.font="bold 24px Arial"; ctx.fillText("Score: "+score,canvas.width-150,40);
 
@@ -191,7 +218,42 @@ function update(){
 }
 
 // ======================
-// Управление
+        // Управление
+// ======================
+function jump(){ if(!gameOver && player.y>=groundY-player.height-1) player.vy=player.jump; }
+function crouchStart(){ if(!gameOver) player.crouching=true; }
+function crouchEnd(){ player.crouching=false; }
+
+document.addEventListener('keydown', e=>{
+  if(invertedControl){ if(e.code==='Space'||e.code==='ArrowDown') jump(); if(e.code==='ArrowUp') crouchStart(); }
+  else { if(e.code==='Space'||e.code==='ArrowUp') jump(); if(e.code==='ArrowDown') crouchStart(); }
+});
+document.addEventListener('keyup', e=>{ if(e.code==='ArrowDown'||e.code==='ArrowUp') crouchEnd(); });
+document.addEventListener('click', jump);
+
+// Сенсор
+let touchStartY=null;
+document.addEventListener('touchstart', e=>{ touchStartY=e.touches[0]?.clientY; });
+document.addEventListener('touchend', e=>{
+  if(!touchStartY) return; let touchEndY=e.changedTouches[0]?.clientY; if(!touchEndY) return;
+  let delta=touchStartY-touchEndY;
+  if(!invertedControl){ if(delta>30) jump(); else if(delta<-30) crouchStart(); }
+  else { if(delta>30) crouchStart(); else if(delta<-30) jump(); }
+  setTimeout(crouchEnd,200); touchStartY=null;
+});
+
+// ======================
+// Кнопка перезапуска
+// ======================
+retryBtn.addEventListener('click',()=>{ restartGame(); });
+
+// ======================
+// Старт игры
+// ======================
+restartGame();
+</script>
+</body>
+</html>// Управление
 // ======================
 function jump(){ if(!gameOver && player.y>=groundY-player.height-1) player.vy=player.jump; }
 function crouchStart(){ if(!gameOver) player.crouching=true; }

@@ -48,9 +48,9 @@ let groundY=0,bgX=0;
 
 // ===== Препятствия =====
 let obstacles=[], obstacleImages={ground:new Image(), air:new Image(), wire:new Image()};
-obstacleImages.ground.src="assets/images/obstacle1.png";
-obstacleImages.air.src="assets/images/obstacle2.png";
-obstacleImages.wire.src="assets/images/obstacle3.png"; // пока не используется
+obstacleImages.ground.src="assets/images/obstacle1.png"; // земля/сигарета
+obstacleImages.air.src="assets/images/obstacle2.png";    // верхнее препятствие
+obstacleImages.wire.src="assets/images/obstacle3.png";   // провод
 
 // ===== Бонусы =====
 let bonuses=[];
@@ -72,7 +72,7 @@ bonusImg.onload=assetLoaded;
 
 // ===== Сброс игры =====
 function restartGame(){
-  groundY=canvas.height*0.73;
+  groundY=canvas.height*0.7; // поднятая земля
   player.y=groundY-player.height; player.vy=0; player.crouching=false; player.effectTimer=0;
   obstacles=[]; bonuses=[];
   frame=0; score=0; gameOver=false;
@@ -83,12 +83,13 @@ function restartGame(){
 
 // ===== Генерация препятствий =====
 function spawnObstacle(){
-  let types=["ground","air"];
+  let types=["ground","air","wire"];
   let type=types[Math.floor(Math.random()*types.length)];
   let o={x:canvas.width,width:50,height:50,type:type};
 
   if(type==="ground") o.y=groundY-o.height;
-  else if(type==="air") o.y=50; // верхнее препятствие
+  else if(type==="air") o.y=50;               // верхнее препятствие
+  else if(type==="wire") o.y=groundY-50;      // провод для приседания
 
   obstacles.push(o);
 }
@@ -98,16 +99,17 @@ function update(){
   if(gameOver){ gameRunning=false; gameOverUI.style.display="block"; return; }
   frame++; ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // Фон
-  if(bgImg.complete) ctx.drawImage(bgImg,bgX,0,canvas.width,canvas.height*0.7);
+  // Фон на всю высоту
+  if(bgImg.complete) ctx.drawImage(bgImg,bgX,0,canvas.width,canvas.height);
   bgX-=1*speedMultiplier; if(bgX<=-canvas.width) bgX=0;
-  if(bgImg.complete) ctx.drawImage(bgImg,bgX+canvas.width,0,canvas.width,canvas.height*0.7);
+  if(bgImg.complete) ctx.drawImage(bgImg,bgX+canvas.width,0,canvas.width,canvas.height);
 
   // Земля
   if(grassImg.complete) ctx.drawImage(grassImg,0,groundY,canvas.width,canvas.height-groundY);
 
   // Создание объектов
   if(frame%100===0) spawnObstacle();
+
   // Препятствия
   for(let i=obstacles.length-1;i>=0;i--){
     let o=obstacles[i]; o.x-=4*speedMultiplier;

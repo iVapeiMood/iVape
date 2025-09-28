@@ -54,12 +54,14 @@ obstacleImages.wire.src="assets/images/obstacle3.png";   // провод
 
 // ===== Бонусы =====
 let bonuses=[];
-let bonusImg=new Image(); bonusImg.src="assets/images/bonus.png";
+let bonusGood = new Image(); bonusGood.src = "assets/images/bonus_good.png"; // положительный
+let bonusBad = new Image(); bonusBad.src = "assets/images/bonus_bad.png";   // отрицательный
 
 let speedMultiplier=1,invertedControl=false,frame=0,score=0,gameOver=false,gameRunning=false;
 
 // ===== Загрузка всех текстур =====
-let assetsLoaded=0; let totalAssets=10;
+let assetsLoaded=0; 
+let totalAssets=14; // учтены бонусы
 function assetLoaded(){ assetsLoaded++; if(assetsLoaded>=totalAssets){ restartGame(); } }
 
 player.imgJump.onload=assetLoaded;
@@ -68,7 +70,8 @@ player.runFrames.forEach(img=>img.onload=assetLoaded);
 bgImg.onload=assetLoaded;
 grassImg.onload=assetLoaded;
 Object.values(obstacleImages).forEach(img=>img.onload=assetLoaded);
-bonusImg.onload=assetLoaded;
+bonusGood.onload=assetLoaded;
+bonusBad.onload=assetLoaded;
 
 // ===== Сброс игры =====
 function restartGame(){
@@ -89,13 +92,21 @@ function spawnObstacle(){
 
   if(type==="ground") o.y=groundY-o.height;
   else if(type==="air") o.y=50;               // верхнее препятствие
-  else if(type==="wire") o.y=groundY-50;      // провод для приседания
+  else if(type==="wire") o.y=groundY-30;      // провод опущен ниже для приседания
 
   obstacles.push(o);
 }
 
+// ===== Генерация бонусов =====
+function spawnBonus(){
+  let types = ["good","bad"];
+  let type = types[Math.floor(Math.random()*types.length)];
+  let b={x:canvas.width,y:groundY-40,width:40,height:40,type:type};
+  bonuses.push(b);
+}
+
 // ===== Основной цикл =====
-function update(){
+  function update(){
   if(gameOver){ gameRunning=false; gameOverUI.style.display="block"; return; }
   frame++; ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -109,6 +120,7 @@ function update(){
 
   // Создание объектов
   if(frame%100===0) spawnObstacle();
+  if(frame%300===0) spawnBonus(); // бонусы каждые 5 секунд
 
   // Препятствия
   for(let i=obstacles.length-1;i>=0;i--){
@@ -121,6 +133,24 @@ function update(){
        player.y+pad<o.y+o.height-pad && playerBottom-pad>o.y+pad){
       gameOver=true;
     }
+  }
+
+  // Бонусы
+  for(let i = bonuses.length - 1; i >= 0; i--){
+      let b = bonuses[i];
+      b.x -= 4*speedMultiplier;
+      if(b.x + b.width < 0){ bonuses.splice(i,1); continue; }
+
+      let img = (b.type==="good")? bonusGood : bonusBad;
+      if(img.complete) ctx.drawImage(img,b.x,b.y,b.width,b.height);
+
+      let playerBottom = player.crouching ? player.y + player.height/2 : player.y + player.height;
+      if(player.x < b.x + b.width && player.x + player.width > b.x &&
+         player.y < b.y + b.height && playerBottom > b.y){
+           bonuses.splice(i,1);
+           if(b.type==="good"){ score +=5; player.effectTimer=30; }
+           else { score = Math.max(0,score-10); invertedControl=true; player.effectTimer=30; setTimeout(()=>invertedControl=false,5000); }
+      }
   }
 
   // Игрок
@@ -144,27 +174,41 @@ function update(){
 
   requestAnimationFrame(update);
 }
-
-// ===== Управление =====
+  // ===== Управление =====
 function jump(){ if(!gameOver && player.y>=groundY-player.height-1) player.vy=player.jump; }
 function crouchStart(){ if(!gameOver) player.crouching=true; }
 function crouchEnd(){ player.crouching=false; }
 
 document.addEventListener('keydown', e=>{
-  if(invertedControl){ if(e.code==='Space'||e.code==='ArrowDown') jump(); if(e.code==='ArrowUp') crouchStart(); }
-  else { if(e.code==='Space'||e.code==='ArrowUp') jump(); if(e.code==='ArrowDown') crouchStart(); }
+  if(invertedControl){
+      if(e.code==='Space'||e.code==='ArrowDown') jump();
+      if(e.code==='ArrowUp') crouchStart();
+  } else {
+      if(e.code==='Space'||e.code==='ArrowUp') jump();
+      if(e.code==='ArrowDown') crouchStart();
+  }
 });
 document.addEventListener('keyup', e=>{ if(e.code==='ArrowDown'||e.code==='ArrowUp') crouchEnd(); });
 document.addEventListener('click', jump);
 
-// Сенсор
+// Сенсор (для телефонов)
 let touchStartY=null;
-document.addEventListener('touchstart', e=>{ touchStartY=e.touches[0]?.clientY; });
+document.addEventListener('touchstart', e=>{
+  touchStartY=e.touches[0]?.clientY;
+});
 document.addEventListener('touchend', e=>{
-  if(!touchStartY) return; let touchEndY=e.changedTouches[0]?.clientY; if(!touchEndY) return;
+  if(!touchStartY) return;
+  let touchEndY=e.changedTouches[0]?.clientY;
+  if(!touchEndY) return;
   let delta=touchStartY-touchEndY;
-  if(!invertedControl){ if(delta>30) jump(); else if(delta<-30) crouchStart(); }
-  else { if(delta>30) crouchStart(); else if(delta<-30) jump(); }
+
+  if(!invertedControl){
+      if(delta>30) jump();         // свайп вверх — прыжок
+      else if(delta<-30) crouchStart(); // свайп вниз — присед
+  } else {
+      if(delta>30) crouchStart();  // перевернутое управление
+      else if(delta<-30) jump();
+  }
   setTimeout(crouchEnd,200); touchStartY=null;
 });
 
@@ -174,6 +218,8 @@ document.getElementById('submitName').addEventListener('click',()=>{
   let input=document.getElementById('nameInput').value.trim();
   if(input){ playerName=input; document.getElementById('nameInputUI').style.display="none"; restartGame(); }
 });
+
+// ===== Старт игры после загрузки ресурсов =====
 </script>
 </body>
 </html>

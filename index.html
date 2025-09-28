@@ -15,28 +15,32 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
 // ======================
-// Игрок (прямоугольник)
+// Игрок
 // ======================
 let player = {
   x: 50, y: 0, width: 40, height: 40,
   vy: 0, gravity: 0.6, jump: -10,
   crouching: false,
-  color: '#FFDD00'
+  runFrames: [], frameIndex: 0, frameSpeed: 5,
+  imgJump: new Image(),
+  imgCrouch: new Image()
 };
 
 // ======================
-// Препятствия (разные цвета)
+// Препятствия
 // ======================
 let obstacles = [];
+let obstacleImages = {ground:new Image(), air:new Image(), middle:new Image()};
 
 // ======================
-// Земля и фон
+// Фон и земля
 // ======================
 let groundY = 150;
 let groundSpeed = 4;
 let tileWidth = 100;
 let groundTiles = [];
 
+let bgImage = new Image();
 let bgX = 0;
 let bgSpeed = 1;
 
@@ -45,6 +49,36 @@ let bgSpeed = 1;
 // ======================
 let score = 0;
 let gameOver = false;
+
+// ======================
+// Загрузка изображений
+// ======================
+let imagesToLoad = 0;
+function loadImage(img, src){
+  imagesToLoad++;
+  img.onload = () => {
+    imagesToLoad--;
+    if(imagesToLoad === 0) initGame(); // Старт игры после загрузки всех изображений
+  };
+  img.src = src;
+}
+
+// Игрок
+for(let i=1;i<=2;i++){
+  let img = new Image();
+  player.runFrames.push(img);
+  loadImage(img, `assets/images/player_run${i}.png`);
+}
+loadImage(player.imgJump, 'assets/images/player_jump.png');
+loadImage(player.imgCrouch, 'assets/images/player_crouch.png');
+
+// Препятствия
+loadImage(obstacleImages.ground, 'assets/images/obstacle1.png');
+loadImage(obstacleImages.air, 'assets/images/obstacle2.png');
+loadImage(obstacleImages.middle, 'assets/images/obstacle3.png');
+
+// Фон
+loadImage(bgImage, 'assets/images/background.png');
 
 // ======================
 // Инициализация тайлов земли
@@ -62,11 +96,12 @@ function initGroundTiles(){
 // ======================
 function createObstacle(){
   let rand = Math.random();
-  let type = rand < 0.4 ? 'ground' : rand < 0.7 ? 'air' : 'middle';
-  let color = type==='ground' ? '#A52A2A' : type==='air' ? '#0000FF' : '#FF00FF';
-  let height = 40;
-  let y = type==='ground' ? groundY - height : type==='air' ? groundY - height - 30 : groundY - height - 15;
-  obstacles.push({x:canvas.width, y:y, width:40, height:height, color: color});
+  let type = rand<0.4?'ground':rand<0.7?'air':'middle';
+  let o = {x:canvas.width, width:40, height:40, type:type};
+  if(type==='ground') o.y = groundY - o.height;
+  else if(type==='air') o.y = groundY - o.height - 30;
+  else o.y = groundY - o.height - 15;
+  obstacles.push(o);
 }
 
 // ======================
@@ -80,7 +115,7 @@ function initGame(){
   score = 0;
   gameOver = false;
   initGroundTiles();
-  // создаём первую волну препятствий
+  // создаём первую волну препятствий, чтобы сразу было что видеть
   for(let i=0;i<3;i++){
     setTimeout(createObstacle, i*500);
   }
@@ -104,12 +139,13 @@ function update(){
   ctx.fillStyle = skyGradient;
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // ---------- Движущийся фон (упрощённо) ----------
-  bgX -= bgSpeed;
-  if(bgX <= -canvas.width) bgX = 0;
-  ctx.fillStyle = '#FF8888';
-  ctx.fillRect(bgX, 50, canvas.width, 50);
-  ctx.fillRect(bgX + canvas.width, 50, canvas.width, 50);
+  // ---------- Движущийся фон ----------
+  if(bgImage.complete){
+    bgX -= bgSpeed;
+    if(bgX <= -canvas.width) bgX = 0;
+    ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
+    ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
+  }
 
   // ---------- Земля ----------
   groundTiles.forEach(tile=>{
@@ -124,8 +160,7 @@ function update(){
   for(let i=obstacles.length-1;i>=0;i--){
     let o = obstacles[i];
     o.x -= groundSpeed;
-    ctx.fillStyle = o.color;
-    ctx.fillRect(o.x, o.y, o.width, o.height);
+    ctx.drawImage(obstacleImages[o.type], o.x, o.y, o.width, o.height);
 
     // коллизия с паддингом
     let padding = 5;
@@ -145,16 +180,24 @@ function update(){
       score++;
     }
   }
+
   // ---------- Игрок ----------
   player.vy += player.gravity;
   player.y += player.vy;
   if(player.y > groundY - player.height) player.y = groundY - player.height, player.vy = 0;
 
+  let actualY = player.y;
   let drawHeight = player.height;
-  if(player.crouching){ drawHeight = player.height/2; }
+  if(player.crouching){ drawHeight = player.height/2; actualY += player.height/2; }
 
-  ctx.fillStyle = player.color;
-  ctx.fillRect(player.x, player.y, player.width, drawHeight);
+  let imgToDraw;
+  if(player.y < groundY - player.height) imgToDraw = player.imgJump;
+  else if(player.crouching) imgToDraw = player.imgCrouch;
+  else{
+    if(frame % player.frameSpeed === 0) player.frameIndex = (player.frameIndex +1) % player.runFrames.length;
+    imgToDraw = player.runFrames[player.frameIndex];
+  }
+  ctx.drawImage(imgToDraw, player.x, actualY, player.width, drawHeight);
 
   // ---------- Счёт ----------
   ctx.fillStyle="black";
@@ -181,11 +224,6 @@ document.addEventListener('touchstart',(e)=>{
   if(e.touches[0].clientY > window.innerHeight/2) crouchStart(); else jump();
 });
 document.addEventListener('touchend', crouchEnd);
-
-// ======================
-// Старт игры
-// ======================
-initGame();
 </script>
 </body>
 </html>

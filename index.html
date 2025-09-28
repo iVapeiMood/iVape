@@ -124,8 +124,16 @@ function spawnBonus(){
 
   // Препятствия
   for(let i=obstacles.length-1;i>=0;i--){
-    let o=obstacles[i]; o.x-=4*speedMultiplier;
-    if(o.x+o.width<0){ obstacles.splice(i,1); score++; continue; }
+    // HITBOX игрока
+let playerTop = player.y;
+let playerBottom = player.crouching ? player.y + player.height/2 : player.y + player.height;
+let playerLeft = player.x;
+let playerRight = player.x + player.width;
+
+if(playerLeft < o.x + o.width && playerRight > o.x &&
+   playerTop < o.y + o.height && playerBottom > o.y){
+  gameOver = true;
+} 
     if(obstacleImages[o.type].complete) ctx.drawImage(obstacleImages[o.type],o.x,o.y,o.width,o.height);
 
     let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
@@ -223,6 +231,7 @@ document.getElementById('submitName').addEventListener('click',()=>{
 </script>
 </body>
 </html>
+
 
 
 

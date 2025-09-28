@@ -159,7 +159,6 @@ function update(){
 
   // Земля
   if(grassImg.complete) ctx.drawImage(grassImg,0,groundY,canvas.width,canvas.height-groundY);
-  else ctx.fillStyle="#228B22"; ctx.fillRect(0,groundY,canvas.width,canvas.height-groundY);
 
   // Создание объектов
   if(frame%100===0) spawnObject("ground");
@@ -217,7 +216,6 @@ function update(){
          imgToDraw=player.runFrames[player.frameIndex]; }
   if(player.effectTimer>0){ if(Math.floor(frame/5)%2==0) ctx.globalAlpha=0.5; }
   if(imgToDraw.complete) ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight);
-  else ctx.fillStyle="blue"; ctx.fillRect(player.x,actualY,player.width,drawHeight);
   ctx.globalAlpha=1;
 
   // Счёт

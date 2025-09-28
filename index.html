@@ -21,7 +21,7 @@ let player = {
   x: 50, y: 0, width: 40, height: 40,
   vy: 0, gravity: 0.6, jump: -10,
   crouching: false,
-  runFrames: [], frameIndex:0, frameSpeed:5,
+  runFrames: [], frameIndex: 0, frameSpeed: 5,
   imgJump: new Image(),
   imgCrouch: new Image()
 };
@@ -47,10 +47,8 @@ let bgSpeed = 1;
 // ======================
 // Игровые параметры
 // ======================
-let frame = 0;
 let score = 0;
 let gameOver = false;
-let gameRunning = false;
 
 // ======================
 // Загрузка изображений
@@ -79,34 +77,22 @@ loadImage(obstacleImages.ground, 'assets/images/obstacle1.png');
 loadImage(obstacleImages.air, 'assets/images/obstacle2.png');
 loadImage(obstacleImages.middle, 'assets/images/obstacle3.png');
 
-// Фон (если есть)
+// Фон
 loadImage(bgImage, 'assets/images/background.png');
 
 // ======================
-// Инициализация игры
+// Инициализация тайлов земли
 // ======================
 function initGroundTiles(){
   let count = Math.ceil(canvas.width / tileWidth) + 2;
+  groundTiles = [];
   for(let i=0;i<count;i++){
     groundTiles.push({x:i*tileWidth, y:groundY, width:tileWidth, height:canvas.height-groundY});
   }
 }
 
-function initGame(){
-  player.y = groundY - player.height;
-  player.vy = 0;
-  player.crouching = false;
-  obstacles = [];
-  frame = 0;
-  score = 0;
-  gameOver = false;
-  if(groundTiles.length === 0) initGroundTiles();
-  if(!gameRunning) update();
-  gameRunning = true;
-}
-
 // ======================
-// Создание препятствия
+// Создание препятствий
 // ======================
 function createObstacle(){
   let rand = Math.random();
@@ -119,11 +105,31 @@ function createObstacle(){
 }
 
 // ======================
+// Инициализация игры
+// ======================
+function initGame(){
+  player.y = groundY - player.height;
+  player.vy = 0;
+  player.crouching = false;
+  obstacles = [];
+  score = 0;
+  gameOver = false;
+  initGroundTiles();
+  // создаём первую волну препятствий, чтобы сразу было что видеть
+  for(let i=0;i<3;i++){
+    setTimeout(createObstacle, i*500);
+  }
+  requestAnimationFrame(update);
+}
+
+// ======================
 // Обновление кадра
 // ======================
+let frame = 0;
 function update(){
-  if(gameOver){ gameRunning=false; return; }
+  if(gameOver) return;
   frame++;
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // ---------- Вечернее небо ----------
@@ -150,7 +156,7 @@ function update(){
   });
 
   // ---------- Препятствия ----------
-  if(frame % 100 === 0) createObstacle();
+  if(frame % 90 === 0) createObstacle();
   for(let i=obstacles.length-1;i>=0;i--){
     let o = obstacles[i];
     o.x -= groundSpeed;
@@ -169,13 +175,16 @@ function update(){
       setTimeout(()=>{ if(confirm("Game Over! Score: "+score+"\nRestart?")) initGame(); },10);
     }
 
-    if(o.x+o.width<0){ obstacles.splice(i,1); score++; }
+    if(o.x + o.width < 0){
+      obstacles.splice(i,1);
+      score++;
+    }
   }
 
   // ---------- Игрок ----------
   player.vy += player.gravity;
   player.y += player.vy;
-  if(player.y > groundY - player.height) player.y = groundY - player.height, player.vy=0;
+  if(player.y > groundY - player.height) player.y = groundY - player.height, player.vy = 0;
 
   let actualY = player.y;
   let drawHeight = player.height;
@@ -185,7 +194,7 @@ function update(){
   if(player.y < groundY - player.height) imgToDraw = player.imgJump;
   else if(player.crouching) imgToDraw = player.imgCrouch;
   else{
-    if(frame % player.frameSpeed===0) player.frameIndex = (player.frameIndex +1) % player.runFrames.length;
+    if(frame % player.frameSpeed === 0) player.frameIndex = (player.frameIndex +1) % player.runFrames.length;
     imgToDraw = player.runFrames[player.frameIndex];
   }
   ctx.drawImage(imgToDraw, player.x, actualY, player.width, drawHeight);
@@ -193,7 +202,7 @@ function update(){
   // ---------- Счёт ----------
   ctx.fillStyle="black";
   ctx.font="16px Arial";
-  ctx.fillText("Score: "+score,500,20);
+  ctx.fillText("Score: "+score, 500, 20);
 
   requestAnimationFrame(update);
 }
@@ -201,22 +210,20 @@ function update(){
 // ======================
 // Управление
 // ======================
-function jump(){ if(!gameOver && player.vy===0) player.vy = player.jump; }
+function jump(){ if(!gameOver && player.vy === 0) player.vy = player.jump; }
 function crouchStart(){ if(!gameOver) player.crouching = true; }
 function crouchEnd(){ player.crouching = false; }
 
 document.addEventListener('keydown',(e)=>{
-  if(e.code==='Space'||e.code==='ArrowUp') jump();
-  if(e.code==='ArrowDown') crouchStart();
+  if(e.code === 'Space' || e.code === 'ArrowUp') jump();
+  if(e.code === 'ArrowDown') crouchStart();
 });
-document.addEventListener('keyup',(e)=>{ if(e.code==='ArrowDown') crouchEnd(); });
+document.addEventListener('keyup',(e)=>{ if(e.code === 'ArrowDown') crouchEnd(); });
 document.addEventListener('click', jump);
 document.addEventListener('touchstart',(e)=>{
-  if(e.touches[0].clientY>window.innerHeight/2) crouchStart(); else jump();
+  if(e.touches[0].clientY > window.innerHeight/2) crouchStart(); else jump();
 });
 document.addEventListener('touchend', crouchEnd);
 </script>
 </body>
 </html>
-
-

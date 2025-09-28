@@ -136,7 +136,7 @@ if(playerLeft < o.x + o.width && playerRight > o.x &&
 } 
     if(obstacleImages[o.type].complete) ctx.drawImage(obstacleImages[o.type],o.x,o.y,o.width,o.height);
 
-    let pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
+     pad=5; let playerBottom=player.crouching?player.y+player.height/2:player.y+player.height;
     if(player.x+pad<o.x+o.width-pad && player.x+player.width-pad>o.x+pad &&
        player.y+pad<o.y+o.height-pad && playerBottom-pad>o.y+pad){
       gameOver=true;
@@ -231,6 +231,7 @@ document.getElementById('submitName').addEventListener('click',()=>{
 </script>
 </body>
 </html>
+
 
 
 

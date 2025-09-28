@@ -19,48 +19,58 @@ const ctx = canvas.getContext('2d');
 // ======================
 let player = {
   x: 50, y: 0, width: 40, height: 40, vy: 0, gravity: 0.6, jump: -10,
-  crouching: false,
-  runFrames: [], frameIndex: 0, frameSpeed: 5,
+  crouching: false, runFrames: [], frameIndex: 0, frameSpeed: 5,
   imgJump: new Image(), imgCrouch: new Image()
 };
-
-// Загружаем две картинки бега
-for(let i=1;i<=2;i++){
-  let img = new Image();
-  img.src = assets/images/player_run${i}.png; 
-  player.runFrames.push(img);
-}
-player.imgJump.src = 'assets/images/player_jump.png';
-player.imgCrouch.src = 'assets/images/player_crouch.png';
 
 // ======================
 // Препятствия
 // ======================
-let obstacleImages = {
-  ground: new Image(),
-  air: new Image(),
-  middle: new Image()
-};
-obstacleImages.ground.src = 'assets/images/obstacle1.png';
-obstacleImages.air.src = 'assets/images/obstacle2.png';
-obstacleImages.middle.src = 'assets/images/obstacle3.png';
-
+let obstacleImages = {ground: new Image(), air: new Image(), middle: new Image()};
 let obstacles = [];
-let frame = 0;
-let score = 0;
-let gameOver = false;
-let gameRunning = false;
 
 // ======================
-// Фон
+// Земля
 // ======================
-let bgX = 0;
 let groundSegments = [
   {x:0, y:150, width:200}, 
   {x:200, y:130, width:150}, 
   {x:350, y:160, width:150},
   {x:500, y:140, width:200},
 ];
+
+let frame = 0;
+let score = 0;
+let gameOver = false;
+let gameRunning = false;
+
+// ======================
+// Загрузка изображений
+// ======================
+let imagesToLoad = 0;
+
+function loadImage(img, src){
+  imagesToLoad++;
+  img.onload = () => {
+    imagesToLoad--;
+    if(imagesToLoad === 0) restartGame(); // Запуск игры после загрузки всех изображений
+  };
+  img.src = src;
+}
+
+// Игрок
+for(let i=1; i<=2; i++){
+  let img = new Image();
+  player.runFrames.push(img);
+  loadImage(img, `assets/images/player_run${i}.png`);
+}
+loadImage(player.imgJump, 'assets/images/player_jump.png');
+loadImage(player.imgCrouch, 'assets/images/player_crouch.png');
+
+// Препятствия
+loadImage(obstacleImages.ground, 'assets/images/obstacle1.png');
+loadImage(obstacleImages.air, 'assets/images/obstacle2.png');
+loadImage(obstacleImages.middle, 'assets/images/obstacle3.png');
 
 // ======================
 // Создание препятствий
@@ -106,13 +116,6 @@ function update() {
   ctx.fillStyle = skyGradient;
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // ---------- Двигающийся фон ----------
-  bgX -= 1;
-  if(bgX <= -canvas.width) bgX = 0;
-  ctx.fillStyle = "#A0E7E5";
-  ctx.fillRect(bgX,0,canvas.width,canvas.height);
-  ctx.fillRect(bgX+canvas.width,0,canvas.width,canvas.height);
-
   // ---------- Двигающаяся земля ----------
   groundSegments.forEach(seg => { seg.x -= 4; });
   for(let i=0;i<groundSegments.length;i++){
@@ -140,8 +143,7 @@ function update() {
     let playerLeft = player.x;
     let playerRight = player.x + player.width;
 
-    if(playerLeft < o.
-       x+o.width && playerRight>o.x && playerTop<o.y+o.height && playerBottom>o.y){
+    if(playerLeft < o.x+o.width && playerRight>o.x && playerTop<o.y+o.height && playerBottom>o.y){
       gameOver = true;
       setTimeout(()=>{ if(confirm("Game Over! Score: "+score+"\nRestart?")) restartGame(); },10);
     }
@@ -158,7 +160,7 @@ function update() {
 
   let actualY = player.y;
   let drawHeight = player.height;
-  if(player.crouching){ drawHeight = player.height/2; actualY+=player.height/2; }
+  if(player.crouching){ drawHeight = player.height/2; actualY += player.height/2; }
 
   let imgToDraw;
   if(player.y<groundY.y-player.height) imgToDraw = player.imgJump;
@@ -167,7 +169,7 @@ function update() {
     if(frame%player.frameSpeed===0) player.frameIndex = (player.frameIndex+1)%player.runFrames.length;
     imgToDraw = player.runFrames[player.frameIndex];
   }
-  ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight);
+  ctx.drawImage(imgToDraw, player.x, actualY, player.width, drawHeight);
 
   // ---------- Счёт ----------
   ctx.fillStyle="black";
@@ -180,7 +182,7 @@ function update() {
 // ======================
 // Управление
 // ======================
-function jump(){ if(!gameOver) player.vy = player.jump; }
+function jump(){ if(!gameOver && player.vy===0) player.vy = player.jump; }
 function crouchStart(){ if(!gameOver) player.crouching = true; }
 function crouchEnd(){ player.crouching = false; }
 
@@ -195,44 +197,7 @@ document.addEventListener('touchstart',(e)=>{
 });
 document.addEventListener('touchend', crouchEnd);
 
-// ======================
-// Старт игры
-// ======================
-restartGame();
 </script>
 </body>
 </html>
 
-// ======================
-// Загрузка изображений
-// ======================
-let imagesToLoad = 0;
-
-function loadImage(img, src){
-  imagesToLoad++;
-  img.onload = ()=>{ imagesToLoad--; if(imagesToLoad===0) restartGame(); }
-  img.src = src;
-}
-
-// Игрок
-player.runFrames = [];
-for(let i=1;i<=2;i++){
-  let img = new Image();
-  player.runFrames.push(img);
-  loadImage(img, `assets/images/player_run${i}.png`);
-}
-player.imgJump = new Image();
-player.imgCrouch = new Image();
-loadImage(player.imgJump, 'assets/images/player_jump.png');
-loadImage(player.imgCrouch, 'assets/images/player_crouch.png');
-
-// Препятствия
-let obstacleImages = {ground:new Image(), air:new Image(), middle:new Image()};
-loadImage(obstacleImages.ground, 'assets/images/obstacle1.png');
-loadImage(obstacleImages.air, 'assets/images/obstacle2.png');
-loadImage(obstacleImages.middle, 'assets/images/obstacle3.png');
-
-// ======================
-// Старт игры
-// ======================
-// Не запускаем restartGame() сразу, ждём, пока imagesToLoad станет 0

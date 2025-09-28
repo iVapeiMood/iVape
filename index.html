@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { margin: 0; overflow: hidden; }
-    canvas { display: block; margin: 0 auto; border: 2px solid #000; background: #87CEEB; }
+    canvas { display: block; margin: 0 auto; border: 2px solid #000; background: #FF5E5B; }
   </style>
 </head>
 <body>
@@ -32,12 +32,17 @@ let obstacles = [];
 // ======================
 // Земля
 // ======================
-let groundSegments = [
-  {x:0, y:150, width:200}, 
-  {x:200, y:130, width:150}, 
-  {x:350, y:160, width:150},
-  {x:500, y:140, width:200},
-];
+let groundY = 150;
+let groundSpeed = 4;
+let groundOffset = 0;
+
+// ======================
+// Фон (параллакс)
+let bgX = 0;
+let bgSpeed = 1;
+let bgImage = new Image();
+bgImage.src = 'assets/images/background.png'; // например горы/облака
+// ======================
 
 let frame = 0;
 let score = 0;
@@ -48,18 +53,14 @@ let gameRunning = false;
 // Загрузка изображений
 // ======================
 let imagesToLoad = 0;
-
 function loadImage(img, src){
   imagesToLoad++;
-  img.onload = () => {
-    imagesToLoad--;
-    if(imagesToLoad === 0) restartGame(); // Запуск игры после загрузки всех изображений
-  };
+  img.onload = () => { imagesToLoad--; if(imagesToLoad===0) restartGame(); };
   img.src = src;
 }
 
 // Игрок
-for(let i=1; i<=2; i++){
+for(let i=1;i<=2;i++){
   let img = new Image();
   player.runFrames.push(img);
   loadImage(img, `assets/images/player_run${i}.png`);
@@ -78,11 +79,10 @@ loadImage(obstacleImages.middle, 'assets/images/obstacle3.png');
 function createObstacle() {
   let rand = Math.random();
   let type = rand<0.4?'ground':rand<0.7?'air':'middle';
-  let segment = groundSegments[Math.floor(Math.random()*groundSegments.length)];
   let o = {x:600, width:40, height:40, type:type};
-  if(type==='ground') o.y = segment.y - o.height;
-  else if(type==='air') o.y = segment.y - o.height - 30;
-  else o.y = segment.y - o.height - 15;
+  if(type==='ground') o.y = groundY - o.height;
+  else if(type==='air') o.y = groundY - o.height - 30;
+  else o.y = groundY - o.height - 15;
   obstacles.push(o);
 }
 
@@ -90,7 +90,7 @@ function createObstacle() {
 // Сброс игры
 // ======================
 function restartGame() {
-  player.y = groundSegments[0].y - player.height;
+  player.y = groundY - player.height;
   player.vy = 0;
   player.crouching = false;
   obstacles = [];
@@ -109,40 +109,41 @@ function update() {
   frame++;
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // ---------- Небо ----------
+  // ---------- Вечернее небо ----------
   let skyGradient = ctx.createLinearGradient(0,0,0,canvas.height);
-  skyGradient.addColorStop(0,'#87CEEB');
-  skyGradient.addColorStop(1,'#E0FFFF');
+  skyGradient.addColorStop(0,'#FF5E5B');
+  skyGradient.addColorStop(1,'#FFA69E');
   ctx.fillStyle = skyGradient;
   ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // ---------- Двигающаяся земля ----------
-  groundSegments.forEach(seg => { seg.x -= 4; });
-  for(let i=0;i<groundSegments.length;i++){
-    let seg = groundSegments[i];
-    ctx.fillStyle="#228B22";
-    ctx.fillRect(seg.x,seg.y,seg.width,20);
-    if(seg.x+seg.width<0){
-      let lastX = groundSegments[groundSegments.length-1].x+groundSegments[groundSegments.length-1].width;
-      seg.x = lastX;
-      seg.y = 130 + Math.random()*40;
-      seg.width = 150 + Math.random()*100;
-    }
+  // ---------- Движущийся фон ----------
+  if(bgImage.complete){
+    bgX -= bgSpeed;
+    if(bgX <= -canvas.width) bgX = 0;
+    ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
+    ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
   }
+
+  // ---------- Движущаяся земля ----------
+  groundOffset -= groundSpeed;
+  if(groundOffset <= -canvas.width) groundOffset = 0;
+  ctx.fillStyle = "#228B22";
+  ctx.fillRect(groundOffset, groundY, canvas.width, canvas.height - groundY);
 
   // ---------- Препятствия ----------
   if(frame % 100 === 0) createObstacle();
   for(let i=obstacles.length-1;i>=0;i--){
     let o = obstacles[i];
-    o.x -= 4;
+    o.x -= groundSpeed;
     ctx.drawImage(obstacleImages[o.type], o.x, o.y, o.width, o.height);
 
-    let playerTop = player.y;
-    let playerBottom = player.y + player.height;
-    if(player.crouching) playerBottom = player.y + player.height/2;
-    
-    let playerLeft = player.x;
-    let playerRight = player.x + player.width;
+    // ===== Исправленная коллизия с небольшим отступом =====
+    let padding = 5;
+    let playerTop = player.y + padding;
+    let playerBottom = player.y + player.height - padding;
+    if(player.crouching) playerBottom = player.y + player.height/2 - padding;
+    let playerLeft = player.x + padding;
+    let playerRight = player.x + player.width - padding;
 
     if(playerLeft < o.x+o.width && playerRight>o.x && playerTop<o.y+o.height && playerBottom>o.y){
       gameOver = true;
@@ -155,19 +156,17 @@ function update() {
   // ---------- Игрок ----------
   player.vy += player.gravity;
   player.y += player.vy;
-
-  let groundY = groundSegments.find(seg=>player.x>=seg.x && player.x<=seg.x+seg.width);
-  if(groundY && player.y>groundY.y-player.height) player.y = groundY.y-player.height, player.vy=0;
+  if(player.y > groundY - player.height) player.y = groundY - player.height, player.vy=0;
 
   let actualY = player.y;
   let drawHeight = player.height;
   if(player.crouching){ drawHeight = player.height/2; actualY += player.height/2; }
 
   let imgToDraw;
-  if(player.y<groundY.y-player.height) imgToDraw = player.imgJump;
+  if(player.y < groundY - player.height) imgToDraw = player.imgJump;
   else if(player.crouching) imgToDraw = player.imgCrouch;
   else {
-    if(frame%player.frameSpeed===0) player.frameIndex = (player.frameIndex+1)%player.runFrames.length;
+    if(frame % player.frameSpeed === 0) player.frameIndex = (player.frameIndex + 1) % player.runFrames.length;
     imgToDraw = player.runFrames[player.frameIndex];
   }
   ctx.drawImage(imgToDraw, player.x, actualY, player.width, drawHeight);

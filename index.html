@@ -1,203 +1,573 @@
-<!DOCTYPE html>
-<html>
+<!-- flappy.html — Скопируйте файл целиком и откройте в браузере -->
+<!doctype html>
+<html lang="ru">
 <head>
-  <title>iVape Runner 2.0</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; margin: 0 auto; border: 2px solid #000; background: #87CEEB; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flappy — Clean Edition</title>
+<style>
+  /* Общая разметка */
+  html,body{height:100%;margin:0;background:linear-gradient(#7ec0ee,#87ceeb 60%,#cdeffd);font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  #gameWrap{max-width:480px;margin:24px auto;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(11,41,73,0.18);background:linear-gradient(#cdeffd,#eafaff);}
+  header{padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+  header h1{font-size:18px;margin:0;color:#0b3460;letter-spacing:0.4px}
+  .controls{display:flex;gap:8px;align-items:center}
+  button{background:#0b69ff;color:#fff;border:0;padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer}
+  button.secondary{background:#ffffff88;color:#0b3460;border:1px solid #0b69ff}
+  button:active{transform:translateY(1px)}
+  #canvas{display:block;width:100%;height:auto;background:transparent}
+  footer{padding:10px 14px;color:#0b3a63;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .hint{opacity:.9}
+  .centerOverlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+  .big{font-size:28px;font-weight:700;color:#04263f;margin:0 0 8px}
+  .small{font-size:14px;color:#04263f;opacity:.9}
+  /* HUD */
+  .hud{position:absolute;left:12px;top:12px;background:rgba(255,255,255,0.85);backdrop-filter:blur(6px);padding:8px 10px;border-radius:8px;font-weight:700;color:#0b3a63}
+  .score{position:absolute;right:12px;top:12px;background:rgba(11,105,255,0.95);color:white;padding:8px 12px;border-radius:999px;font-weight:800}
+  /* Mobile touch big button (invisible but good for UX) */
+  .touchLayer{position:absolute;inset:0}
+  /* particle style not needed in CSS (canvas draws them) */
+  @media (max-width:420px){
+    header h1{font-size:15px}
+    .big{font-size:22px}
+  }
+</style>
 </head>
 <body>
-<canvas id="game" width="600" height="200"></canvas>
+<div id="gameWrap">
+  <header>
+    <h1>Flappy — Clean Edition</h1>
+    <div class="controls">
+      <button id="btnToggle">Пауза</button>
+      <button id="btnRestart" class="secondary">Рестарт</button>
+    </div>
+  </header>
+
+  <div style="position:relative">
+    <canvas id="canvas" width="480" height="640"></canvas>
+    <div class="hud" id="hud">Рекорд: 0</div>
+    <div class="score" id="score">0</div>
+
+    <div class="centerOverlay" id="overlay" style="pointer-events:auto">
+      <div id="startPanel">
+        <p class="big">Нажмите / тап — Полетели!</p>
+        <p class="small">Space / клик / тап. Зарабатывайте очки, пролезая через трубы.</p>
+      </div>
+      <div id="gameOverPanel" style="display:none">
+        <p class="big" id="gameOverText">Поражение</p>
+        <p class="small" id="finalScore">Счет: 0</p>
+        <p class="small">Рекорд: <span id="finalHigh">0</span></p>
+        <div style="margin-top:10px">
+          <button id="tryBtn">Играть снова</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- big invisible layer to capture taps for mobile -->
+    <div class="touchLayer" id="touchLayer"></div>
+  </div>
+
+  <footer>
+    <div class="hint">Классическая физика: гравитация и импульс.</div>
+    <div>Made with ♥</div>
+  </footer>
+</div>
+
 <script>
-const canvas = document.getElementById('game');
+/* Flappy — Clean Edition
+   Особенности:
+   - Canvas + requestAnimationFrame
+   - Плавная физика, ускорение, вращение птицы
+   - Генерация труб с рандомным зазором
+   - Счёт и рекорд в localStorage
+   - Простые звуки через WebAudio (без файлов)
+   - Поддержка клика, Space, тапов
+   - Частицы при столкновении
+*/
+
+/* ------------------------------
+   Конфиг игры (легко изменять)
+   ------------------------------ */
+const CONFIG = {
+  width: 480,
+  height: 640,
+  gravity: 1100,          // px/s^2
+  flapImpulse: -350,      // px/s
+  maxFallSpeed: 900,      // px/s
+  pipeSpeed: -160,        // px/s (отрицательное — влево)
+  pipeSpawnInterval: 1.5, // сек
+  pipeGap: 150,           // px (базовый)
+  pipeGapVariance: 60,    // px
+  pipeMinY: 80,
+  groundHeight: 96,
+  birdSize: 34,
+  rotationMax: 45 * Math.PI/180,
+  rotationMin: -45 * Math.PI/180,
+  pipeWidth: 78,
+  maxParticle: 120
+};
+
+/* ------------------------------
+   Canvas и контекст
+   ------------------------------ */
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-// ======================
-// Игрок
-// ======================
-let player = {
-  x: 50, y: 0, width: 40, height: 40, vy: 0, gravity: 0.6, jump: -10,
-  crouching: false,
-  runFrames: [], frameIndex: 0, frameSpeed: 5,
-  imgJump: new Image(), imgCrouch: new Image()
-};
-
-// Загружаем две картинки бега
-for(let i=1;i<=2;i++){
-  let img = new Image();
-  img.src = assets/images/player_run${i}.png; 
-  player.runFrames.push(img);
+/* Поддержка HiDPI */
+function resizeCanvasToDisplaySize() {
+  const rect = canvas.getBoundingClientRect();
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(320, Math.floor(rect.width * devicePixelRatio));
+  canvas.height = Math.max(480, Math.floor((rect.width * devicePixelRatio) * (CONFIG.height / CONFIG.width)));
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
 }
-player.imgJump.src = 'assets/images/player_jump.png';
-player.imgCrouch.src = 'assets/images/player_crouch.png';
+function fitCanvas() {
+  // Поддерживаем фиксированное соотношение: ширина ограничена контейнером
+  const wrap = document.getElementById('gameWrap');
+  const w = Math.min(CONFIG.width, wrap.clientWidth);
+  canvas.style.width = w + 'px';
+  // высота рассчитывается под оригинальные пропорции
+  canvas.style.height = (CONFIG.height * (w / CONFIG.width)) + 'px';
+  resizeCanvasToDisplaySize();
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
 
-// ======================
-// Препятствия
-// ======================
-let obstacleImages = {
-  ground: new Image(),
-  air: new Image(),
-  middle: new Image()
-};
-obstacleImages.ground.src = 'assets/images/obstacle1.png';
-obstacleImages.air.src = 'assets/images/obstacle2.png';
-obstacleImages.middle.src = 'assets/images/obstacle3.png';
-
-let obstacles = [];
-let frame = 0;
+/* ------------------------------
+   Состояния и сущности
+   ------------------------------ */
+let lastTime = performance.now();
+let accumulator = 0;
+let running = false;
+let paused = false;
+let spawnTimer = 0;
+let pipes = [];
+let particles = [];
 let score = 0;
-let gameOver = false;
-let gameRunning = false;
+let highScore = +localStorage.getItem('flappy_high') || 0;
+let gameState = 'menu'; // 'menu', 'playing', 'dead', 'paused'
 
-// ======================
-// Фон
-// ======================
-let bgX = 0;
-let groundSegments = [
-  {x:0, y:150, width:200}, 
-  {x:200, y:130, width:150}, 
-  {x:350, y:160, width:150},
-  {x:500, y:140, width:200},
-];
+const hud = document.getElementById('hud');
+const scoreEl = document.getElementById('score');
+const overlay = document.getElementById('overlay');
+const startPanel = document.getElementById('startPanel');
+const gameOverPanel = document.getElementById('gameOverPanel');
+const gameOverText = document.getElementById('gameOverText');
+const finalScore = document.getElementById('finalScore');
+const finalHigh = document.getElementById('finalHigh');
 
-// ======================
-// Создание препятствий
-// ======================
-function createObstacle() {
-  let rand = Math.random();
-  let type = rand<0.4?'ground':rand<0.7?'air':'middle';
-  let segment = groundSegments[Math.floor(Math.random()*groundSegments.length)];
-  let o = {x:600, width:40, height:40, type:type};
-  if(type==='ground') o.y = segment.y - o.height;
-  else if(type==='air') o.y = segment.y - o.height - 30;
-  else o.y = segment.y - o.height - 15;
-  obstacles.push(o);
+/* Bird (игрок) */
+const bird = {
+  x: CONFIG.width * 0.28,
+  y: CONFIG.height * 0.5,
+  vy: 0,
+  w: CONFIG.birdSize,
+  h: CONFIG.birdSize,
+  rotation: 0,
+  wingAnim: 0
+};
+
+/* ------------------------------
+   Звуки (WebAudio) — синтезированные
+   ------------------------------ */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playBeep(type='flap') {
+  const now = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  if (type === 'flap') {
+    o.frequency.setValueAtTime(420, now);
+    o.frequency.exponentialRampToValueAtTime(620, now + 0.06);
+    g.gain.setValueAtTime(0.15, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+  } else if (type === 'score') {
+    o.frequency.value = 880;
+    g.gain.value = 0.07;
+    o.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+  } else if (type === 'hit') {
+    o.type = 'triangle';
+    o.frequency.value = 180;
+    g.gain.value = 0.2;
+    o.frequency.exponentialRampToValueAtTime(60, now + 0.5);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+  }
+  o.connect(g);
+  g.connect(audioCtx.destination);
+  o.start(now);
+  o.stop(now + 0.6);
 }
 
-// ======================
-// Сброс игры
-// ======================
-function restartGame() {
-  player.y = groundSegments[0].y - player.height;
-  player.vy = 0;
-  player.crouching = false;
-  obstacles = [];
-  frame = 0;
+/* ------------------------------
+   Функции управления
+   ------------------------------ */
+function resetGame() {
+  pipes = [];
+  particles = [];
   score = 0;
-  gameOver = false;
-  if(!gameRunning) update();
-  gameRunning = true;
+  spawnTimer = 0;
+  bird.x = CONFIG.width * 0.28;
+  bird.y = CONFIG.height * 0.5;
+  bird.vy = 0;
+  bird.rotation = 0;
+  gameState = 'menu';
+  updateHud();
+  showStartPanel();
+}
+function startGame() {
+  // при старте сбрасываем всё кроме рекорда
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  pipes = [];
+  particles = [];
+  score = 0;
+  spawnTimer = 0;
+  bird.y = CONFIG.height * 0.45;
+  bird.vy = 0;
+  gameState = 'playing';
+  hideOverlay();
+  updateHud();
+}
+function endGame() {
+  gameState = 'dead';
+  playBeep('hit');
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('flappy_high', highScore);
+  }
+  finalScore.textContent = 'Счет: ' + score;
+  finalHigh.textContent = highScore;
+  showGameOverPanel();
 }
 
-// ======================
-// Отрисовка
-// ======================
-function update() {
-  if(gameOver){ gameRunning=false; return; }
-  frame++;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // ---------- Небо ----------
-  let skyGradient = ctx.createLinearGradient(0,0,0,canvas.height);
-  skyGradient.addColorStop(0,'#87CEEB');
-  skyGradient.addColorStop(1,'#E0FFFF');
-  ctx.fillStyle = skyGradient;
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  // ---------- Двигающийся фон ----------
-  bgX -= 1;
-  if(bgX <= -canvas.width) bgX = 0;
-  ctx.fillStyle = "#A0E7E5";
-  ctx.fillRect(bgX,0,canvas.width,canvas.height);
-  ctx.fillRect(bgX+canvas.width,0,canvas.width,canvas.height);
-
-  // ---------- Двигающаяся земля ----------
-  groundSegments.forEach(seg => { seg.x -= 4; });
-  for(let i=0;i<groundSegments.length;i++){
-    let seg = groundSegments[i];
-    ctx.fillStyle="#228B22";
-    ctx.fillRect(seg.x,seg.y,seg.width,20);
-    if(seg.x+seg.width<0){
-      let lastX = groundSegments[groundSegments.length-1].x+groundSegments[groundSegments.length-1].width;
-      seg.x = lastX;
-      seg.y = 130 + Math.random()*40;
-      seg.width = 150 + Math.random()*100;
-    }
-  }
-
-  // ---------- Препятствия ----------
-  if(frame % 100 === 0) createObstacle();
-  for(let i=obstacles.length-1;i>=0;i--){
-    let o = obstacles[i];
-    o.x -= 4;
-    ctx.drawImage(obstacleImages[o.type], o.x, o.y, o.width, o.height);
-
-    let playerTop = player.y;
-    let playerBottom = player.y + player.height;
-    if(player.crouching) playerBottom = player.y + player.height/2;
-    let playerLeft = player.x;
-    let playerRight = player.x + player.width;
-
-    if(playerLeft < o.x+o.width && playerRight>o.x && playerTop<o.y+o.height && playerBottom>o.y){
-      gameOver = true;
-      setTimeout(()=>{ if(confirm("Game Over! Score: "+score+"\nRestart?")) restartGame(); },10);
-    }
-
-    if(o.x+o.width<0){ obstacles.splice(i,1); score++; }
-  }
-
-  // ---------- Игрок ----------
-  player.vy += player.gravity;
-  player.y += player.vy;
-
-  let groundY = groundSegments.find(seg=>player.x>=seg.x && player.x<=seg.x+seg.width);
-  if(groundY && player.y>groundY.y-player.height) player.y = groundY.y-player.height, player.vy=0;
-
-  let actualY = player.y;
-  let drawHeight = player.height;
-  if(player.crouching){ drawHeight = player.height/2; actualY+=player.height/2; }
-
-  let imgToDraw;
-  if(player.y<groundY.y-player.height) imgToDraw = player.imgJump;
-  else if(player.crouching) imgToDraw = player.imgCrouch;
-  else {
-    if(frame%player.frameSpeed===0) player.frameIndex = (player.frameIndex+1)%player.runFrames.length;
-    imgToDraw = player.runFrames[player.frameIndex];
-  }
-  ctx.drawImage(imgToDraw,player.x,actualY,player.width,drawHeight);
-
-  // ---------- Счёт ----------
-  ctx.fillStyle="black";
-  ctx.font="16px Arial";
-  ctx.fillText("Score: "+score,500,20);
-
-  requestAnimationFrame(update);
+/* ------------------------------
+   Панели UI
+   ------------------------------ */
+const overlayElem = document.getElementById('overlay');
+function showStartPanel(){
+  startPanel.style.display = 'block';
+  gameOverPanel.style.display = 'none';
+  overlayElem.style.pointerEvents = 'auto';
+}
+function showGameOverPanel(){
+  startPanel.style.display = 'none';
+  gameOverPanel.style.display = 'block';
+  overlayElem.style.pointerEvents = 'auto';
+}
+function hideOverlay(){
+  overlayElem.style.pointerEvents = 'none';
+  startPanel.style.display = 'none';
+  gameOverPanel.style.display = 'none';
 }
 
-// ======================
-// Управление
-// ======================
-function jump(){ if(!gameOver) player.vy = player.jump; }
-function crouchStart(){ if(!gameOver) player.crouching = true; }
-function crouchEnd(){ player.crouching = false; }
-
-document.addEventListener('keydown',(e)=>{
-  if(e.code==='Space'||e.code==='ArrowUp') jump();
-  if(e.code==='ArrowDown') crouchStart();
+/* ------------------------------
+   Ввод: клик, тап, Space
+   ------------------------------ */
+function flap() {
+  if (gameState === 'menu') {
+    startGame();
+  }
+  if (gameState === 'playing') {
+    bird.vy = CONFIG.flapImpulse;
+    playBeep('flap');
+  }
+  if (gameState === 'dead') {
+    resetGame();
+  }
+}
+canvas.addEventListener('click', function(e){ flap(); });
+document.getElementById('touchLayer').addEventListener('touchstart', function(e){
+  e.preventDefault();
+  flap();
+}, {passive:false});
+window.addEventListener('keydown', function(e){
+  if (e.code === 'Space') {
+    e.preventDefault();
+    flap();
+  } else if (e.code === 'KeyP') {
+    togglePause();
+  }
 });
-document.addEventListener('keyup',(e)=>{ if(e.code==='ArrowDown') crouchEnd(); });
-document.addEventListener('click', jump);
-document.addEventListener('touchstart',(e)=>{
-  if(e.touches[0].clientY>window.innerHeight/2) crouchStart(); else jump();
+document.getElementById('btnRestart').addEventListener('click', resetGame);
+document.getElementById('btnToggle').addEventListener('click', togglePause);
+document.getElementById('tryBtn').addEventListener('click', function(){
+  startGame();
 });
-document.addEventListener('touchend', crouchEnd);
 
-// ======================
-// Старт игры
-// ======================
-restartGame();
+/* ------------------------------
+   Пауза
+   ------------------------------ */
+function togglePause(){
+  if (gameState === 'playing') {
+    paused = !paused;
+    gameState = paused ? 'paused' : 'playing';
+    document.getElementById('btnToggle').textContent = paused ? 'Возобновить' : 'Пауза';
+    if (!paused) {
+      // сброс времени, чтобы избежать прыжка времени
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+  } else if (gameState === 'paused') {
+    paused = false;
+    gameState = 'playing';
+  }
+}
+
+/* ------------------------------
+   Трубы — генерация и обновление
+   ------------------------------ */
+function spawnPipe() {
+  const gap = CONFIG.pipeGap + (Math.random()*CONFIG.pipeGapVariance - CONFIG.pipeGapVariance/2);
+  const minY = CONFIG.pipeMinY;
+  const maxY = CONFIG.height - CONFIG.groundHeight - minY - gap;
+  const topY = minY + Math.random() * (Math.max(0, maxY - minY));
+  const pipe = {
+    x: CONFIG.width + 20,
+    top: topY,
+    gap: gap,
+    width: CONFIG.pipeWidth,
+    passed: false
+  };
+  pipes.push(pipe);
+}
+function updatePipes(dt) {
+  spawnTimer += dt;
+  if (spawnTimer > CONFIG.pipeSpawnInterval) {
+    spawnTimer = 0;
+    spawnPipe();
+  }
+  for (let i = pipes.length-1; i>=0; i--) {
+    const p = pipes[i];
+    p.x += CONFIG.pipeSpeed * dt;
+    // счёт, когда птица проходит трубу
+    if (!p.passed && (p.x + p.width) < bird.x) {
+      p.passed = true;
+      score++;
+      playBeep('score');
+      updateHud();
+    }
+    // удалить за левым краем
+    if (p.x + p.width < -50) pipes.splice(i,1);
+  }
+}
+
+/* ------------------------------
+   Физика птицы и столкновения
+   ------------------------------ */
+function updateBird(dt) {
+  bird.vy += CONFIG.gravity * dt;
+  if (bird.vy > CONFIG.maxFallSpeed) bird.vy = CONFIG.maxFallSpeed;
+  bird.y += bird.vy * dt;
+
+  // вращение по скорости (плавно)
+  const targetRot = Math.max(CONFIG.rotationMin, Math.min(CONFIG.rotationMax, bird.vy / 700 * CONFIG.rotationMax));
+  bird.rotation += (targetRot - bird.rotation) * Math.min(1, dt * 8);
+
+  // проверка земли/потолка
+  const groundY = CONFIG.height - CONFIG.groundHeight;
+  if (bird.y + bird.h/2 >= groundY) {
+    bird.y = groundY - bird.h/2;
+    if (gameState === 'playing') endGame();
+  }
+  if (bird.y - bird.h/2 < 0) {
+    bird.y = bird.h/2;
+    bird.vy = 0;
+  }
+
+  // столкновение с трубами
+  for (let p of pipes) {
+    const bx = bird.x;
+    const by = bird.y;
+    const bw = bird.w;
+    const bh = bird.h;
+    // библиотека хитбоксов: мы используем AABB vs rect for pipes (pipes are rectangles)
+    // верхняя труба: x..x+width, y..top
+    if (bx + bw/2 > p.x && bx - bw/2 < p.x + p.width) {
+      if (by - bh/2 < p.top || by + bh/2 > p.top + p.gap) {
+        if (gameState === 'playing') {
+          // коллизия
+          spawnHitParticles(bx, by, Math.min(18, 6 + Math.floor(Math.abs(bird.vy)/40)));
+          endGame();
+        }
+      }
+    }
+  }
+}
+
+/* ------------------------------
+   Частицы при ударе
+   ------------------------------ */
+function spawnHitParticles(x,y,count) {
+  for (let i=0;i<count;i++){
+    if (particles.length > CONFIG.maxParticle) break;
+    particles.push({
+      x: x + (Math.random()-0.5)*20,
+      y: y + (Math.random()-0.5)*20,
+      vx: (Math.random()-0.5)*320,
+      vy: (Math.random()-1.5)*320,
+      life: 0.7 + Math.random()*0.6,
+      t: 0,
+      size: 2 + Math.random()*4
+    });
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length-1; i>=0; i--) {
+    const p = particles[i];
+    p.t += dt;
+    if (p.t > p.life) {
+      particles.splice(i,1); continue;
+    }
+    p.vy += CONFIG.gravity * dt * 0.2;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+}
+
+/* ------------------------------
+   Рендер
+   ------------------------------ */
+function drawBackground() {
+  // небо уже через CSS; добавим лёгкие облака
+  const grad = ctx.createLinearGradient(0,0,0,CONFIG.height);
+  grad.addColorStop(0,'rgba(255,255,255,0.05)');
+  grad.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,CONFIG.width,CONFIG.height);
+  // простой солнце
+  ctx.beginPath();
+  ctx.fillStyle = '#FFE9A8';
+  ctx.arc(60,60,32,0,Math.PI*2);
+  ctx.fill();
+}
+function drawGround() {
+  const y = CONFIG.height - CONFIG.groundHeight;
+  ctx.fillStyle = '#5c9e2a';
+  ctx.fillRect(0,y,CONFIG.width,CONFIG.groundHeight);
+  // текстура травы: полосы
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  for(let i=0;i<20;i++){
+    ctx.fillRect((i*48) % CONFIG.width, y + (i%2?6:12), CONFIG.width/6, 6);
+  }
+}
+function drawPipes() {
+  ctx.fillStyle = '#2f9c5a';
+  for (let p of pipes) {
+    // верхняя
+    ctx.fillRect(p.x, 0, p.width, p.top);
+    // нижняя
+    ctx.fillRect(p.x, p.top + p.gap, p.width, CONFIG.height - CONFIG.groundHeight - (p.top + p.gap));
+    // краевые тени
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(p.x, 0, 6, p.top);
+    ctx.fillRect(p.x, p.top + p.gap, 6, CONFIG.height - CONFIG.groundHeight - (p.top + p.gap));
+    ctx.fillStyle = '#2f9c5a';
+  }
+}
+function drawBird() {
+  ctx.save();
+  ctx.translate(bird.x, bird.y);
+  ctx.rotate(bird.rotation);
+  const s = bird.w;
+  // корпус — простой круг/овал
+  ctx.beginPath();
+  ctx.fillStyle = '#ffdd55';
+  ctx.ellipse(0,0,s*0.52,s*0.42,0,0,Math.PI*2);
+  ctx.fill();
+  // крыло (анимация)
+  const wingY = Math.sin(performance.now()/120 + bird.wingAnim)*6;
+  ctx.beginPath();
+  ctx.fillStyle = '#f0c93b';
+  ctx.ellipse(-3, wingY, s*0.26, s*0.12, 0, 0, Math.PI*2);
+  ctx.fill();
+  // глаз
+  ctx.beginPath();
+  ctx.fillStyle = '#fff';
+  ctx.arc(6, -4, s*0.12, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.fillStyle = '#000';
+  ctx.arc(8, -4, s*0.06, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+  bird.wingAnim += 0.1;
+}
+function drawParticles() {
+  for (let p of particles) {
+    const lifeRatio = 1 - (p.t / p.life);
+    ctx.globalAlpha = lifeRatio;
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * lifeRatio, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+function drawHUD() {
+  // score and highscore drawn via DOM; but draw small shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.fillRect(8,8,56,28);
+}
+
+/* ------------------------------
+   Основной цикл
+   ------------------------------ */
+function updateHud() {
+  hud.textContent = 'Рекорд: ' + highScore;
+  scoreEl.textContent = score;
+}
+function loop(now) {
+  if (!running) return;
+  const dt = Math.min(0.035, (now - lastTime)/1000);
+  lastTime = now;
+  if (!paused && gameState === 'playing') {
+    updatePipes(dt);
+    updateBird(dt);
+    updateParticles(dt);
+  } else {
+    // если меню — небольшой взмах крыла
+    bird.wingAnim += 0.04;
+  }
+
+  // рендер
+  ctx.clearRect(0,0,CONFIG.width,CONFIG.height);
+  drawBackground();
+  drawPipes();
+  drawParticles();
+  drawBird();
+  drawGround();
+  drawHUD();
+
+  // Если игра в состоянии dead — показать overlay (после рендера)
+  if (gameState === 'dead') {
+    showGameOverPanel();
+  }
+
+  // обновление DOM score
+  updateHud();
+
+  requestAnimationFrame(loop);
+}
+
+/* ------------------------------
+   Инициализация
+   ------------------------------ */
+function init() {
+  running = true;
+  lastTime = performance.now();
+  updateHud();
+  showStartPanel();
+  requestAnimationFrame(loop);
+}
+init();
+
+/* ------------------------------
+   Примечания/параметры
+   ------------------------------
+   - Можно менять CONFIG для тонкой подстройки
+   - Всё рисуется программно — нет внешних картинок
+   - Аудио минималистичное и синтезированное
+*/
 </script>
 </body>
 </html>

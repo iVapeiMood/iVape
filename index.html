@@ -2,241 +2,246 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>iVape Game</title>
+  <title>iVape Runner</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
+      background: black;
     }
     canvas {
       display: block;
+      margin: 0 auto;
     }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-
-  <script>
-    // Вставляй сюда весь код, который я прислал
-    const canvas = document.getElementById("gameCanvas");
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let groundHeight = canvas.height * 0.3;
-let groundY = canvas.height - groundHeight;
-
-let playerImg = new Image();
-playerImg.src = "images/player.png";
-
-let groundImg = new Image();
-groundImg.src = "images/ground.png";
-
-let obstacleImages = {
-    "ground": new Image(),
-    "air": new Image(),
-    "wire": new Image()
-};
-obstacleImages["ground"].src = "images/Obstacle1.png"; // сигарета
-obstacleImages["air"].src = "images/Obstacle2.png";    // батарейка
-obstacleImages["wire"].src = "images/Obstacle3.png";   // провод
-
-let bonusGood = new Image();
-bonusGood.src = "images/bonusGood.png";
-let bonusBad = new Image();
-bonusBad.src = "images/bonusBad.png";
-
-// Игрок
-let player = {
-    x: 50,
-    y: groundY - 80,
-    width: 50,
-    height: 80,
-    vy: 0,
-    jumping: false,
-    crouching: false,
-    effectTimer: 0
-};
-
-let gravity = 0.6;
-let obstacles = [];
-let bonuses = [];
 let score = 0;
 let gameOver = false;
-let invertedControl = false;
 let speedMultiplier = 1;
+let invertedControl = false;
 
-// управление (ПК)
+const groundHeight = canvas.height * 0.3;
+const groundY = canvas.height - groundHeight;
+
+// ========== ТЕКСТУРЫ ==========
+const playerImg = new Image(); playerImg.src = "images/player.png";
+const groundImg = new Image(); groundImg.src = "images/ground.png";
+const obstacle1 = new Image(); obstacle1.src = "images/Obstacle1.png"; // сигарета
+const obstacle2 = new Image(); obstacle2.src = "images/Obstacle2.png"; // батарейка
+const obstacle3 = new Image(); obstacle3.src = "images/Obstacle3.png"; // провод
+const bonusGood = new Image(); bonusGood.src = "images/bonusGood.png";
+const bonusBad = new Image(); bonusBad.src = "images/bonusBad.png";
+
+// ========== ИГРОК ==========
+let player = {
+  x: 100,
+  y: groundY - 80,
+  width: 60,
+  height: 80,
+  vy: 0,
+  gravity: 0.6,
+  jump: -12,
+  crouching: false,
+  effectTimer: 0
+};
+
+// ========== МАССИВЫ ==========
+let obstacles = [];
+let bonuses = [];
+let frame = 0;
+
+// ========== СОЗДАНИЕ ПРЕПЯТСТВИЙ ==========
+function createObstacle() {
+  let rand = Math.random();
+  let o = {x: canvas.width, width: 60, height: 60, type: "ground"};
+
+  if (rand < 0.4) {
+    o.type = "ground"; // сигарета
+    o.y = groundY - o.height;
+  } else if (rand < 0.7) {
+    o.type = "air"; // батарейка
+    o.y = groundY - o.height - 120;
+  } else {
+    o.type = "wire"; // провод
+    o.y = groundY - o.height - 40; // чтобы надо было пригибаться
+  }
+  obstacles.push(o);
+}
+
+// ========== СОЗДАНИЕ БОНУСОВ ==========
+function createBonus() {
+  let type = Math.random() < 0.5 ? "good" : "bad";
+  let b = {x: canvas.width, width: 40, height: 40, type: type};
+  b.y = groundY - b.height - (type === "good" ? 100 : 50);
+
+  // Проверка, чтобы не пересекался с препятствиями
+  if (obstacles.some(o => Math.abs(o.x - b.x) < 80)) return;
+
+  bonuses.push(b);
+}
+
+// ========== УПРАВЛЕНИЕ ==========
+function jump() {
+  if (!gameOver && player.y >= groundY - player.height) {
+    player.vy = player.jump;
+  }
+}
+function crouchStart() { if (!gameOver) player.crouching = true; }
+function crouchEnd() { player.crouching = false; }
+
 document.addEventListener("keydown", e => {
-    if (!gameOver) {
-        if ((e.code === "ArrowUp" || e.code === "Space") && !player.jumping) {
-            player.vy = -12;
-            player.jumping = true;
-        }
-        if (e.code === "ArrowDown") {
-            player.crouching = true;
-        }
-    }
+  if (!invertedControl) {
+    if (e.code === "Space" || e.code === "ArrowUp") jump();
+    if (e.code === "ArrowDown") crouchStart();
+  } else {
+    if (e.code === "ArrowDown") jump();
+    if (e.code === "Space" || e.code === "ArrowUp") crouchStart();
+  }
 });
 document.addEventListener("keyup", e => {
-    if (e.code === "ArrowDown") player.crouching = false;
+  if (!invertedControl) {
+    if (e.code === "ArrowDown") crouchEnd();
+  } else {
+    if (e.code === "Space" || e.code === "ArrowUp") crouchEnd();
+  }
 });
 
-// управление (телефон)
+// Touch (для мобилы)
 let touchStartY = null;
-canvas.addEventListener("touchstart", e => {
-    touchStartY = e.touches[0].clientY;
+document.addEventListener("touchstart", e => {
+  touchStartY = e.touches[0].clientY;
 });
-canvas.addEventListener("touchend", e => {
-    let endY = e.changedTouches[0].clientY;
-    let deltaY = endY - touchStartY;
-
-    if (!gameOver) {
-        if (deltaY < -50 && !player.jumping) {
-            player.vy = -12;
-            player.jumping = true;
-        }
-        if (deltaY > 50) {
-            player.crouching = true;
-            setTimeout(() => player.crouching = false, 500);
-        }
-    }
+document.addEventListener("touchend", e => {
+  let dy = e.changedTouches[0].clientY - touchStartY;
+  if (dy < -50) (!invertedControl ? jump() : crouchStart());
+  else if (dy > 50) (!invertedControl ? crouchStart() : jump());
+  else crouchEnd();
 });
 
-// создаём препятствия и бонусы
-function spawnObstacle() {
-    let types = ["ground", "air", "wire"];
-    let type = types[Math.floor(Math.random() * types.length)];
-    let o = { type: type, x: canvas.width, width: 50, height: 50 };
-
-    if (type === "ground") {
-        o.y = groundY - o.height;
-    } else if (type === "air") {
-        o.y = groundY - 150;
-    } else if (type === "wire") {
-        o.y = groundY - 100; // высота провода: можно пройти только присев
-        o.width = 120;
-        o.height = 30;
-    }
-    obstacles.push(o);
-}
-
-function spawnBonus() {
-    if (obstacles.length > 0 && Math.random() < 0.7) return; // защита: бонус не поверх преп.
-    let type = Math.random() < 0.5 ? "good" : "bad";
-    let b = { type: type, x: canvas.width, width: 40, height: 40 };
-    b.y = groundY - b.height - 10;
-    bonuses.push(b);
-}
-
-// обновление игры
+// ========== ОТРИСОВКА ==========
 function update() {
-    if (gameOver) return;
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "white";
+    ctx.font = "30px Arial";
+    ctx.fillText("Game Over! Счёт: "+score, canvas.width/2-120, canvas.height/2-40);
+    ctx.fillText("Нажмите R для рестарта", canvas.width/2-150, canvas.height/2+20);
+    return;
+  }
 
-    // гравитация
-    player.y += player.vy;
-    player.vy += gravity;
-    if (player.y + player.height > groundY) {
-        player.y = groundY - player.height;
-        player.vy = 0;
-        player.jumping = false;
+  frame++;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Небо
+  let sky = ctx.createLinearGradient(0,0,0,canvas.height);
+  sky.addColorStop(0,"#ff7e5f");
+  sky.addColorStop(1,"#2b1055");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Земля
+  if (groundImg.complete) {
+    ctx.drawImage(groundImg,0,groundY,canvas.width,groundHeight);
+  } else {
+    ctx.fillStyle="green";
+    ctx.fillRect(0,groundY,canvas.width,groundHeight);
+  }
+
+  // Игрок
+  player.vy += player.gravity;
+  player.y += player.vy;
+  if (player.y > groundY - player.height) {
+    player.y = groundY - player.height;
+    player.vy = 0;
+  }
+  let drawH = player.crouching ? player.height/2 : player.height;
+  let drawY = player.crouching ? player.y+player.height/2 : player.y;
+  if (playerImg.complete) {
+    ctx.drawImage(playerImg, player.x, drawY, player.width, drawH);
+  } else {
+    ctx.fillStyle="blue";
+    ctx.fillRect(player.x, drawY, player.width, drawH);
+  }
+
+  // Препятствия
+  if (frame % 120 === 0) createObstacle();
+  for (let i=obstacles.length-1;i>=0;i--){
+    let o = obstacles[i];
+    o.x -= 6*speedMultiplier;
+    let img = obstacle1;
+    if (o.type==="air") img=obstacle2;
+    if (o.type==="wire") img=obstacle3;
+    if (img.complete) ctx.drawImage(img,o.x,o.y,o.width,o.height);
+    else { ctx.fillStyle="red"; ctx.fillRect(o.x,o.y,o.width,o.height); }
+    if (o.x+o.width<0) obstacles.splice(i,1);
+
+    // Хитбокс
+    let pTop = player.y;
+    let pBottom = player.crouching ? player.y+player.height/2 : player.y+player.height;
+    let pLeft = player.x;
+    let pRight = player.x+player.width;
+
+    if (pLeft < o.x+o.width && pRight > o.x && pTop < o.y+o.height && pBottom > o.y) {
+      gameOver = true;
     }
+  }
 
-    // препятствия
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-        let o = obstacles[i];
-        o.x -= 6 * speedMultiplier;
-        if (o.x + o.width < 0) {
-            obstacles.splice(i, 1);
-            score++;
-            continue;
-        }
-        if (obstacleImages[o.type].complete) {
-            ctx.drawImage(obstacleImages[o.type], o.x, o.y, o.width, o.height);
-        }
+  // Бонусы
+  if (frame % 200 === 0) createBonus();
+  for (let i=bonuses.length-1;i>=0;i--){
+    let b = bonuses[i];
+    b.x -= 6*speedMultiplier;
+    let img = (b.type==="good"?bonusGood:bonusBad);
+    if (img.complete) ctx.drawImage(img,b.x,b.y,b.width,b.height);
+    else { ctx.fillStyle=(b.type==="good"?"lime":"red"); ctx.fillRect(b.x,b.y,b.width,b.height); }
+    if (b.x+b.width<0) bonuses.splice(i,1);
 
-        // хитбокс игрока
-        let pTop = player.y;
-        let pBottom = player.crouching ? player.y + player.height / 2 : player.y + player.height;
-        let pLeft = player.x;
-        let pRight = player.x + player.width;
-
-        if (pLeft < o.x + o.width &&
-            pRight > o.x &&
-            pTop < o.y + o.height &&
-            pBottom > o.y) {
-            gameOver = true;
-        }
+    // Коллизия с бонусом
+    let pTop = player.y;
+    let pBottom = player.crouching ? player.y+player.height/2 : player.y+player.height;
+    let pLeft = player.x;
+    let pRight = player.x+player.width;
+    if (pLeft < b.x+b.width && pRight > b.x && pTop < b.y+b.height && pBottom > b.y) {
+      bonuses.splice(i,1);
+      if (b.type==="good") {
+        score+=5;
+        speedMultiplier=2;
+        setTimeout(()=>{speedMultiplier=1;},5000);
+      } else {
+        score=Math.max(0,score-10);
+        invertedControl=true;
+        setTimeout(()=>{invertedControl=false;},5000);
+      }
     }
+  }
 
-    // бонусы
-  for (let i = bonuses.length - 1; i >= 0; i--) {
-        let b = bonuses[i];
-        b.x -= 6 * speedMultiplier;
-        if (b.x + b.width < 0) {
-            bonuses.splice(i, 1);
-            continue;
-        }
+  // Счёт
+  ctx.fillStyle="white";
+  ctx.font="24px Arial";
+  ctx.fillText("Счёт: "+score,20,40);
 
-        let img = (b.type === "good") ? bonusGood : bonusBad;
-        if (img.complete) ctx.drawImage(img, b.x, b.y, b.width, b.height);
-
-        let pTop = player.y;
-        let pBottom = player.crouching ? player.y + player.height / 2 : player.y + player.height;
-        let pLeft = player.x;
-        let pRight = player.x + player.width;
-
-        if (pLeft < b.x + b.width &&
-            pRight > b.x &&
-            pTop < b.y + b.height &&
-            pBottom > b.y) {
-            bonuses.splice(i, 1);
-            if (b.type === "good") {
-                score += 5;
-                speedMultiplier = 1.5;
-                setTimeout(() => speedMultiplier = 1, 5000);
-            } else {
-                score = Math.max(0, score - 10);
-                invertedControl = true;
-                setTimeout(() => invertedControl = false, 5000);
-            }
-        }
-    }
+  requestAnimationFrame(update);
 }
 
-// рисование
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // небо
-    ctx.fillStyle = "#87CEEB";
-    ctx.fillRect(0, 0, canvas.width, groundY);
-
-    // земля
-    if (groundImg.complete) {
-        ctx.drawImage(groundImg, 0, groundY, canvas.width, groundHeight);
-    }
-
-    // игрок
-    ctx.drawImage(playerImg, player.x, player.y,
-        player.width, player.crouching ? player.height / 2 : player.height);
-
-    // счёт
-    ctx.fillStyle = "#000";
-    ctx.font = "24px Arial";
-    ctx.fillText("Счёт: " + score, 20, 40);
-}
-
-function gameLoop() {
+// Рестарт
+document.addEventListener("keydown", e=>{
+  if (e.code==="KeyR" && gameOver){
+    score=0; obstacles=[]; bonuses=[]; frame=0; gameOver=false;
     update();
-    draw();
-    requestAnimationFrame(gameLoop);
-}
+  }
+});
 
-setInterval(spawnObstacle, 2000);
-setInterval(spawnBonus, 5000);
-
-gameLoop();
-  </script>
+// Запуск
+update();
+</script>
 </body>
 </html>
